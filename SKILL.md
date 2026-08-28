@@ -118,9 +118,41 @@ node <SKILL_DIR>/scripts/sim-trade.mjs status
 5. 用 snapshot 记录含**沪深300基准**的净值快照
 6. 向用户汇报操作、持仓、累计盈亏、**超额收益**，并复盘优化规则
 
+**真实账户（与模拟分离）**：用户真实持仓单独管理，用 `real-trade.mjs`（数据存 `real-account.json`，与模拟 `account.json` 完全独立）：
+
+```bash
+# 加入真实持仓
+node <SKILL_DIR>/scripts/real-trade.mjs add 002594 400 89.447 --note "真实买入比亚迪"
+
+# 实时分析所有真实持仓（DSH 信号）
+node <SKILL_DIR>/scripts/real-trade.mjs analyze
+
+# 记录真实账户快照（含沪深300基准）
+node <SKILL_DIR>/scripts/real-trade.mjs snapshot
+
+# 卖出
+node <SKILL_DIR>/scripts/real-trade.mjs sell 002594 400 95.0 --note "止盈卖出"
+```
+
+用户报告真实买卖时，用 real-trade.mjs 记录并给出 DSH 实时分析（信号/位置/情绪/增长/支撑压力/浮盈亏）。
+
 **每日汇报**：运行 sim-daily.mjs 后，向用户汇报：今日买卖操作、当前持仓、累计盈亏、净值曲线，并说明**为什么买入/卖出**（信号依据）。持续跟踪多日后，复盘哪些规则有效、哪些需要优化，调整 `account.json` 中 `rules` 字段后继续。
 
 > ⚠️ 模拟交易仅供策略研究，不构成投资建议。
+
+## 自选股票跟踪（watchlist-analysis.mjs）
+
+用户自选列表（GUI 面板「我的自选」）每日实时分析，标记买卖时机：
+
+```bash
+# 分析全部自选（从 dsh web watchlist 接口读取）
+node <SKILL_DIR>/scripts/watchlist-analysis.mjs --out <工作区>/watchlist-report.html
+
+# 或指定代码
+node <SKILL_DIR>/scripts/watchlist-analysis.mjs --codes 600519,002594
+```
+
+**输出**：每只自选的信号（可买入/可关注/观望/注意止盈/回避）、位置研判、情绪、增长、支撑压力。向用户汇报自选股的**买卖时机提示**（如「比亚迪可关注但位置偏高」「宁德时代信号回避建议观望」）。
 
 ## 注意事项
 
