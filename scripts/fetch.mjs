@@ -162,6 +162,56 @@ async function fetchFlashNews(name, code) {
   } catch (e) { return []; }
 }
 
+/** 东财 F10 主要财务指标：营收/净利同比、ROE、毛利率、EPS（近4期） */
+async function fetchFundamentals(secid) {
+  try {
+    const code = String(secid).split(".")[1];
+    const mkt = String(secid).startsWith("1") ? "SH" : "SZ";
+    const secucode = code + "." + mkt;
+    const url = "https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FINANCE_MAINFINADATA" +
+      "&columns=SECUCODE,SECURITY_NAME_ABBR,REPORT_DATE,REPORT_DATE_NAME,TOTALOPERATEREVETZ,PARENTNETPROFITTZ," +
+      "ROEJQ,XSMLL,EPSJB,TOTALOPERATEREVE,PARENTNETPROFIT&filter=(SECUCODE%3D%22" + secucode + "%22)" +
+      "&pageNumber=1&pageSize=4&sortTypes=-1&sortColumns=REPORT_DATE&source=HSF10&client=PC";
+    const r = await fetch(url, { headers: { ...UA, "Referer": "https://emweb.securities.eastmoney.com/" } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const rows = (j.result && j.result.data) || [];
+    return rows.map(x => ({
+      reportDate: (x.REPORT_DATE || "").slice(0, 10),
+      reportName: x.REPORT_DATE_NAME || "",
+      revenue: x.TOTALOPERATEREVE,
+      revenueYoy: x.TOTALOPERATEREVETZ,
+      netProfit: x.PARENTNETPROFIT,
+      netProfitYoy: x.PARENTNETPROFITTZ,
+      roe: x.ROEJQ,
+      grossMargin: x.XSMLL,
+      eps: x.EPSJB,
+    }));
+  } catch (e) { return null; }
+}
+
+/** 东财估值：动态PE / 市净率 / 总市值 / 净利同比 */
+async function fetchValuation(secid) {
+  try {
+    const url = "https://push2.eastmoney.com/api/qt/stock/get?secid=" + secid +
+      "&fields=f43,f57,f58,f162,f167,f164,f163,f116,f117,f85,f184,f9,f23&ut=fa5fd1943c7b386f172d6893dbfba10b";
+    const r = await fetch(url, { headers: UA });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const d = j.data;
+    if (!d) return null;
+    return {
+      peDynamic: d.f162 !== undefined && d.f162 !== "-" ? d.f162 / 100 : null,     // 动态市盈率
+      pb: d.f167 !== undefined && d.f167 !== "-" ? d.f167 / 100 : null,             // 市净率
+      peTtm: d.f164 !== undefined && d.f164 !== "-" ? d.f164 / 100 : null,          // TTM市盈率
+      peStatic: d.f163 !== undefined && d.f163 !== "-" ? d.f163 / 100 : null,       // 静态市盈率
+      totalMv: d.f116,                                                              // 总市值
+      circMv: d.f117,                                                               // 流通市值
+      netProfitYoy: d.f184 !== undefined && d.f184 !== "-" ? d.f184 : null,          // 最新净利同比(%)
+    };
+  } catch (e) { return null; }
+}
+
 /** 汇总新闻：腾讯个股新闻 + 东财公告 + 快讯过滤，大盘快讯垫底 */
 async function fetchNews(name, code, secid) {
   const [tNews, ann, flash] = await Promise.all([
@@ -178,15 +228,21 @@ async function fetchNews(name, code, secid) {
 export async function run(argv) {
   const args = parseArgs(argv);
   if (!args.code) throw new Error("用法: node fetch.mjs <代码或名称> [--days N] [--out 文件]");
-  const stock = await resolveStock(args.code);
-  const [quote, kline, news] = await Promise.all([
+  // 支持直接传 secid（如 "1.600519" / "0.000001"），供 screen.mjs 复用免解析
+  const stock = /^\d\.\d{6}$/.test(args.code)
+    ? { code: args.code.split(".")[1], name: null, secid: args.code, market: "AStock" }
+    : await resolveStock(args.code);
+  const [quote, kline, news, fundamentals, valuation] = await Promise.all([
     fetchQuote(stock.secid),
     fetchKline(stock.secid, args.days),
-    fetchNews(stock.name, stock.code, stock.secid),
+    fetchNews(stock.name || "", stock.code, stock.secid),
+    fetchFundamentals(stock.secid),
+    fetchValuation(stock.secid),
   ]);
+  stock.name = stock.name || quote.name || "";
   const result = {
     meta: { code: stock.code, name: stock.name, secid: stock.secid, market: stock.market, fetchedAt: new Date().toISOString() },
-    quote, kline, news,
+    quote, kline, news, fundamentals, valuation,
   };
   if (args.out) {
     const fs = await import("node:fs");

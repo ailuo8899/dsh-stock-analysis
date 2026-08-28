@@ -176,6 +176,28 @@ function renderHTML(data, result, svg) {
   const pos = result.position;
   const scoreBarPos = Math.max(0, Math.min(100, (s.score + 100) / 2));
 
+  // 未来增长（基本面）
+  const gr = result.growth || null;
+  const grLabelCls = gr ? (gr.score >= 20 ? "up" : gr.score <= -20 ? "down" : "neu") : "neu";
+  const growthItems = (gr && gr.factors || []).map(f => {
+    const icon = f.dir === "多" ? "▲" : f.dir === "空" ? "▼" : "◆";
+    const cls = f.dir === "多" ? "f-bull" : f.dir === "空" ? "f-bear" : "f-neu";
+    const sc = f.score > 0 ? "+" + f.score : fmt(f.score, 0);
+    return '<div class="factor ' + cls + '"><span class="f-icon">' + icon + '</span><div><div class="f-name">' + esc(f.name) + ' <span class="f-score">' + sc + '</span></div><div class="f-desc">' + esc(f.desc) + '</div></div></div>';
+  }).join("");
+  const fundRows = (gr && gr.fundamentals || []).map(x => {
+    const revCls = x.revenueYoy >= 0 ? "up" : "down";
+    const npCls = x.netProfitYoy >= 0 ? "up" : "down";
+    return '<tr><td>' + esc(x.reportName) + '</td><td class="' + revCls + '">' + (x.revenueYoy === null || x.revenueYoy === undefined ? "-" : fmt(x.revenueYoy, 1) + "%") + '</td><td class="' + npCls + '">' + (x.netProfitYoy === null || x.netProfitYoy === undefined ? "-" : fmt(x.netProfitYoy, 1) + "%") + '</td><td>' + fmt(x.roe, 1) + '</td><td>' + fmt(x.grossMargin, 1) + '%</td><td>' + fmt(x.eps) + '</td></tr>';
+  }).join("");
+  const v = (gr && gr.valuation) || {};
+  const valItems = [
+    ["动态 PE", fmt(v.peDynamic, 1) + (v.peDynamic ? "" : "")],
+    ["TTM PE", fmt(v.peTtm, 1)],
+    ["市净率 PB", fmt(v.pb, 2)],
+    ["总市值", v.totalMv ? (v.totalMv >= 1e12 ? fmt(v.totalMv / 1e12, 2) + " 万亿" : fmt(v.totalMv / 1e8, 0) + " 亿") : "-"],
+  ].map(([k, val]) => '<div class="card"><div class="k">' + k + '</div><div class="v">' + val + '</div></div>').join("");
+
   const indicatorRows = [
     ["MA5 / MA10", fmt(ind.ma5) + " / " + fmt(ind.ma10)],
     ["MA20 / MA60", fmt(ind.ma20) + " / " + fmt(ind.ma60)],
@@ -383,6 +405,26 @@ tr:last-child td{border-bottom:none}
     </div>
   </div>
 
+  <div class="panel">
+    <h2>📈 未来增长（基本面）</h2>
+    <div class="senti-head">
+      <span class="senti-score ${grLabelCls}">${gr ? gr.score : "-"}</span>
+      <span class="senti-label tag-${grLabelCls}">${gr ? esc(gr.label) : "暂无"}</span>
+      <span style="color:var(--dim);font-size:12px">基于最新财报（净利/营收增速、ROE、毛利率、PEG）</span>
+    </div>
+    <div class="vsum">${gr ? esc(gr.summary) : "基本面数据暂不可用"}</div>
+    <div style="margin:14px 0;border-top:1px solid var(--line)"></div>
+    <div class="factors">${growthItems}</div>
+    <div style="margin:14px 0;border-top:1px solid var(--line)"></div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:8px">近四期财务（营收同比 / 净利同比 / ROE / 毛利率 / EPS）</div>
+    <table>
+      <tr><th>报告期</th><th>营收同比</th><th>净利同比</th><th>ROE</th><th>毛利率</th><th>EPS</th></tr>
+      ${fundRows || '<tr><td colspan="6" style="color:var(--dim)">暂无财务数据</td></tr>'}
+    </table>
+    <div style="margin:14px 0;border-top:1px solid var(--line)"></div>
+    <div class="cards" style="margin-bottom:0">${valItems}</div>
+  </div>
+
   <div class="disc">⚠️ 免责声明：本报告由公开行情数据自动生成，仅供参考，不构成任何投资建议。股市有风险，入市需谨慎。</div>
 </div></body></html>`;
   return html;
@@ -421,6 +463,10 @@ function renderSummary(data, result, svg) {
     se.summary,
     "",
     "相关新闻：" + relNews,
+    "",
+    "#### 📈 未来增长：" + (result.growth ? result.growth.label + "（" + result.growth.score + "/100）" : "暂无数据"),
+    "",
+    result.growth ? result.growth.summary : "",
     posLine,
     "",
     "> 详细报告（完整 K 线图、技术指标表、盈亏计算器）见 HTML 文件。⚠️ 分析仅供参考，不构成投资建议。",

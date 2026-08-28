@@ -273,6 +273,104 @@ function calcLevels(kline, ind) {
   return { supports: s, resistances: r, recentHigh: hi60, recentLow: lo60 };
 }
 
+// ---------- 未来增长评分（基本面） ----------
+function calcGrowth(data) {
+  const fund = data.fundamentals || [];
+  const val = data.valuation || {};
+  const quote = data.quote || {};
+  const factors = [];
+  const add = (name, score, desc, dir) => factors.push({ name, score, desc, dir });
+
+  const latest = fund[0] || null;
+  const prev1 = fund[1] || null;
+  const prev2 = fund[2] || null;
+
+  // 1. 最新报告期净利同比
+  const npy = latest && latest.netProfitYoy;
+  if (npy !== null && npy !== undefined) {
+    if (npy >= 30) add("净利增速", 2, "净利同比 " + fmt(npy, 1) + "%，高速增长", "多");
+    else if (npy >= 15) add("净利增速", 1.5, "净利同比 " + fmt(npy, 1) + "%，稳健增长", "多");
+    else if (npy >= 5) add("净利增速", 0.8, "净利同比 " + fmt(npy, 1) + "%，温和增长", "多");
+    else if (npy >= 0) add("净利增速", 0.2, "净利同比 " + fmt(npy, 1) + "%，基本持平", "中性");
+    else if (npy >= -10) add("净利增速", -0.8, "净利同比 " + fmt(npy, 1) + "%，小幅下滑", "空");
+    else add("净利增速", -2, "净利同比 " + fmt(npy, 1) + "%，明显下滑", "空");
+  } else add("净利增速", 0, "暂无净利增速数据", "中性");
+
+  // 2. 营收同比
+  const rvy = latest && latest.revenueYoy;
+  if (rvy !== null && rvy !== undefined) {
+    if (rvy >= 20) add("营收增速", 1.5, "营收同比 " + fmt(rvy, 1) + "%，增长强劲", "多");
+    else if (rvy >= 10) add("营收增速", 1, "营收同比 " + fmt(rvy, 1) + "%，稳定增长", "多");
+    else if (rvy >= 0) add("营收增速", 0.3, "营收同比 " + fmt(rvy, 1) + "%，平稳", "中性");
+    else add("营收增速", -1, "营收同比 " + fmt(rvy, 1) + "%，收缩", "空");
+  } else add("营收增速", 0, "暂无营收增速数据", "中性");
+
+  // 3. 增长趋势：近三季净利同比是否改善
+  if (latest && prev1 && prev2) {
+    const seq = [prev2.netProfitYoy, prev1.netProfitYoy, latest.netProfitYoy].filter(v => v !== null && v !== undefined);
+    if (seq.length === 3) {
+      if (seq[2] > seq[1] && seq[1] > seq[0]) add("增长趋势", 1.5, "净利同比连续改善（" + seq.map(v => fmt(v, 0)).join("→") + "%），拐点向上", "多");
+      else if (seq[2] > seq[1]) add("增长趋势", 0.8, "净利同比边际改善（" + fmt(seq[2], 0) + "%），动能回升", "多");
+      else if (seq[2] < seq[0]) add("增长趋势", -1, "净利同比走弱（" + fmt(seq[2], 0) + "%），增长承压", "空");
+      else add("增长趋势", 0, "增长趋势平稳", "中性");
+    } else add("增长趋势", 0, "增长趋势数据不足", "中性");
+  } else add("增长趋势", 0, "增长趋势数据不足", "中性");
+
+  // 4. ROE 质量
+  const roe = latest && latest.roe;
+  if (roe !== null && roe !== undefined) {
+    if (roe >= 15) add("盈利能力", 1.5, "ROE " + fmt(roe, 1) + "%，盈利质量优秀", "多");
+    else if (roe >= 10) add("盈利能力", 1, "ROE " + fmt(roe, 1) + "%，盈利质量良好", "多");
+    else if (roe >= 5) add("盈利能力", 0.3, "ROE " + fmt(roe, 1) + "%，盈利质量一般", "中性");
+    else add("盈利能力", -1, "ROE " + fmt(roe, 1) + "%，盈利质量较差", "空");
+  } else add("盈利能力", 0, "暂无 ROE 数据", "中性");
+
+  // 5. 毛利率
+  const gm = latest && latest.grossMargin;
+  if (gm !== null && gm !== undefined) {
+    if (gm >= 40) add("毛利率", 1, "毛利率 " + fmt(gm, 1) + "%，护城河深厚", "多");
+    else if (gm >= 25) add("毛利率", 0.5, "毛利率 " + fmt(gm, 1) + "%，具备竞争力", "多");
+    else if (gm >= 10) add("毛利率", 0, "毛利率 " + fmt(gm, 1) + "%，行业一般水平", "中性");
+    else add("毛利率", -0.5, "毛利率 " + fmt(gm, 1) + "%，竞争激烈", "空");
+  } else add("毛利率", 0, "暂无毛利率数据", "中性");
+
+  // 6. 估值匹配：PE × 净利增速（PEG 思想，简化）
+  const pe = val.peDynamic || val.peTtm || null;
+  const growth = latest && latest.netProfitYoy;
+  if (pe !== null && growth !== null && growth !== undefined) {
+    if (growth > 0) {
+      const peg = pe / growth;
+      if (peg <= 1) add("估值匹配", 1.5, "PEG≈" + fmt(peg, 2) + "（PE " + fmt(pe, 1) + " / 增速 " + fmt(growth, 1) + "%），估值合理", "多");
+      else if (peg <= 1.5) add("估值匹配", 0.8, "PEG≈" + fmt(peg, 2) + "，估值略高但可接受", "多");
+      else if (peg <= 2.5) add("估值匹配", 0, "PEG≈" + fmt(peg, 2) + "，估值偏高", "中性");
+      else add("估值匹配", -1, "PEG≈" + fmt(peg, 2) + "，估值明显偏高", "空");
+    } else if (pe > 0) {
+      add("估值匹配", -0.5, "盈利下滑但 PE " + fmt(pe, 1) + "，估值不便宜", "空");
+    }
+  } else add("估值匹配", 0, "估值/增速数据不足", "中性");
+
+  // 汇总
+  const raw = factors.reduce((s, f) => s + f.score, 0);
+  const score = Math.max(-100, Math.min(100, Math.round(raw / 10 * 100)));
+  let label;
+  if (score >= 40) label = "高增长";
+  else if (score >= 20) label = "稳健增长";
+  else if (score > -20) label = "增长平稳";
+  else if (score > -45) label = "增长承压";
+  else label = "明显萎缩";
+  const bullCount = factors.filter(f => f.dir === "多").length;
+  const bearCount = factors.filter(f => f.dir === "空").length;
+  const summary = "未来增长分 " + score + "/100（" + label + "）。多头因子 " + bullCount + " 个，空头因子 " + bearCount + " 个。"
+    + (score >= 40 ? "基本面增长强劲，具备成长性。" : score >= 20 ? "基本面稳步增长，值得关注。" : score > -20 ? "基本面平稳，缺乏明确增长驱动。" : "基本面走弱，成长性存疑。");
+
+  return {
+    score, label, factors, summary,
+    fundamentals: fund.slice(0, 4),
+    valuation: val,
+    quote,
+  };
+}
+
 // ---------- 持仓盈亏 ----------
 function calcPosition(quote, levels, signals, shares, cost) {
   const price = quote.price;
@@ -305,7 +403,9 @@ export async function run(argv) {
   }
   if (!args.data) throw new Error("用法: node analyze.mjs <data.json> [--shares N --cost P] [--out result.json]");
   const fs = await import("node:fs");
-  const data = JSON.parse(fs.readFileSync(args.data, "utf8"));
+  const data = args.data.trimStart().startsWith("{")
+    ? JSON.parse(args.data)                                   // 内联 JSON（供 screen.mjs 复用）
+    : JSON.parse(fs.readFileSync(args.data, "utf8"));
   if (!data.kline || data.kline.length < 30) throw new Error("K线数据不足（<30 根），请用 --days 增加数量");
 
   const kline = data.kline;
@@ -313,6 +413,7 @@ export async function run(argv) {
   const signals = calcSignals(kline, ind);
   const sentiment = calcSentiment(data.news || [], data.quote || { pct: 0 });
   const levels = calcLevels(kline, ind);
+  const growth = calcGrowth(data);
 
   const result = {
     meta: data.meta,
@@ -322,7 +423,7 @@ export async function run(argv) {
       macd: ind.macd, rsi6: ind.rsi6, rsi14: ind.rsi14, kdj: ind.kdj,
       boll: ind.boll, volMa5: ind.volMa5, volMa10: ind.volMa10,
     },
-    signals, sentiment, levels,
+    signals, sentiment, levels, growth,
   };
 
   if (args.shares && args.cost) {
