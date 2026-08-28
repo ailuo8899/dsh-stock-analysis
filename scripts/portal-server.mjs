@@ -13,6 +13,7 @@ const PORT = process.argv.includes("--port") ? parseInt(process.argv[process.arg
 const DSH_API = "http://127.0.0.1:3080";
 import { run as localFetchRun } from "./fetch.mjs";
 import { run as localAnalyzeRun } from "./analyze.mjs";
+import { advisorSim, advisorReal } from "./advisor.mjs";
 
 // 产品门户 HTML（单页应用）
 function portalHTML() {
@@ -133,13 +134,31 @@ async function loadSim(){
     const acc=j.sim;
     if(!acc){el.innerHTML='<div class="empty">模拟账户未初始化</div>';return;}
     const last=acc.daily&&acc.daily.length?acc.daily[acc.daily.length-1]:null;
-    const rows=(acc.holdings||[]).map(h=>'<tr><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+(h.buyDate||"-")+'</td></tr>').join("");
-    el.innerHTML='<div class="cards">'+
-      '<div class="card"><div class="k">总资产</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?fmt(last.totalValue,0):"-")+'</div></div>'+
-      '<div class="card"><div class="k">累计盈亏</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?(last.pnl>=0?"+":"")+fmt(last.pnl,0)+"（"+(last.pnlPct>=0?"+":"")+fmt(last.pnlPct,2)+"%）":"-")+'</div></div>'+
-      '<div class="card"><div class="k">现金</div><div class="v">'+fmt(acc.cash,0)+'</div></div>'+
-      '<div class="card"><div class="k">沪深300</div><div class="v">'+(last&&last.benchPct!=null?(last.benchPct>=0?"+":"")+fmt(last.benchPct,2)+"%":"—")+'</div></div></div>'+
-      '<table><tr><th>股票</th><th>股数</th><th>成本</th><th>买入日</th></tr>'+(rows||'<tr><td colspan="4" class="empty">空仓</td></tr>')+'</table>';
+    let advice='';
+    try{
+      const ar=await fetch('/api/advisor/sim').then(r=>r.json());
+      advice='<div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:12px;padding:14px;margin-bottom:16px">'
+        +'<div style="font-size:13px;font-weight:700;color:#3b82f6;margin-bottom:6px">🧑‍💼 理财师建议</div>'
+        +'<div style="font-size:13px;margin-bottom:4px"><b>风险等级：</b>'+esc(ar.riskLevel||"-")+' ｜ <b>仓位：</b>'+esc(ar.positionRisk.level)+' '+ar.positionRisk.pct+'%</div>'
+        +'<div style="font-size:12px;color:var(--dim);margin-bottom:4px">'+esc(ar.concentration.note)+'</div>'
+        +'<div style="font-size:13px">'+esc(ar.overall)+'</div></div>';
+    }catch(e){}
+    const rows=(acc.holdings||[]).map(h=>{
+      const pl=(h.price-h.costPrice)*h.shares;
+      const plPct=h.costPrice>0?(h.price-h.costPrice)/h.costPrice*100:0;
+      return '<tr><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price||h.costPrice)+'</td>'
+        +'<td style="color:'+(pl>=0?"var(--up)":"var(--down)")+'">'+(pl>=0?"+":"")+fmt(pl,0)+'<br><span style="font-size:11px">'+(plPct>=0?"+":"")+fmt(plPct,2)+'%</span></td>'
+        +'<td style="color:var(--down);font-size:12px">'+(h.stopLoss?fmt(h.stopLoss):"-")+'</td>'
+        +'<td style="color:var(--up);font-size:12px">'+(h.takeProfit?fmt(h.takeProfit):"-")+'</td>'
+        +'<td style="font-size:12px">'+esc(h.verdict||"-")+' '+fmt(h.score)+'</td></tr>';
+    }).join("");
+    el.innerHTML=advice
+      +'<div class="cards">'
+      +'<div class="card"><div class="k">总资产</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?fmt(last.totalValue,0):"-")+'</div></div>'
+      +'<div class="card"><div class="k">累计盈亏</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?(last.pnl>=0?"+":"")+fmt(last.pnl,0)+"（"+(last.pnlPct>=0?"+":"")+fmt(last.pnlPct,2)+"%）":"-")+'</div></div>'
+      +'<div class="card"><div class="k">现金</div><div class="v">'+fmt(acc.cash,0)+'</div></div>'
+      +'<div class="card"><div class="k">持仓数</div><div class="v">'+(acc.holdings||[]).length+'/'+(acc.rules?acc.rules.maxHoldings:3)+'</div></div></div>'
+      +'<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>浮盈亏</th><th>止损</th><th>止盈</th><th>信号</th></tr>'+(rows||'<tr><td colspan="8" class="empty">空仓</td></tr>')+'</table>';
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
 
@@ -151,12 +170,24 @@ async function loadReal(){
     const acc=j.real;
     if(!acc||!(acc.holdings||[]).length){el.innerHTML='<div class="empty">暂无真实持仓</div>';return;}
     const last=acc.daily&&acc.daily.length?acc.daily[acc.daily.length-1]:null;
-    const rows=(acc.holdings||[]).map(h=>'<tr><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+(h.buyDate||"-")+'</td></tr>').join("");
-    el.innerHTML='<div class="cards">'+
-      '<div class="card"><div class="k">持仓市值</div><div class="v">'+(last?fmt(last.holdingsValue,0):"-")+'</div></div>'+
-      '<div class="card"><div class="k">浮动盈亏</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?(last.pnl>=0?"+":"")+fmt(last.pnl,0)+"（"+(last.pnlPct>=0?"+":"")+fmt(last.pnlPct,2)+"%）":"-")+'</div></div>'+
-      '<div class="card"><div class="k">持仓成本</div><div class="v">'+(last?fmt(last.costValue,0):"-")+'</div></div></div>'+
-      '<table><tr><th>股票</th><th>股数</th><th>成本</th><th>买入日</th></tr>'+rows+'</table>';
+    let advice='';
+    try{
+      const ar=await fetch('/api/advisor/real').then(r=>r.json());
+      advice='<div style="background:rgba(46,189,133,.08);border:1px solid rgba(46,189,133,.3);border-radius:12px;padding:14px;margin-bottom:16px">'
+        +'<div style="font-size:13px;font-weight:700;color:#2ebd85;margin-bottom:6px">🧑‍💼 理财师建议</div>'
+        +'<div style="font-size:13px;margin-bottom:4px"><b>风险等级：</b>'+esc(ar.riskLevel||"-")+'</div>'
+        +'<div style="font-size:13px">'+esc(ar.overall)+'</div></div>';
+    }catch(e){}
+    const rows=(acc.holdings||[]).map(h=>{
+      return '<tr><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+(h.buyDate||"-")+'</td></tr>';
+    }).join("");
+    el.innerHTML=advice
+      +'<div class="cards">'
+      +'<div class="card"><div class="k">持仓市值</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?fmt(last.holdingsValue,0):"-")+'</div></div>'
+      +'<div class="card"><div class="k">浮动盈亏</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?(last.pnl>=0?"+":"")+fmt(last.pnl,0)+"（"+(last.pnlPct>=0?"+":"")+fmt(last.pnlPct,2)+"%）":"-")+'</div></div>'
+      +'<div class="card"><div class="k">持仓成本</div><div class="v">'+(last?fmt(last.costValue,0):"-")+'</div></div>'
+      +'<div class="card"><div class="k">沪深300</div><div class="v">'+(last&&last.benchPct!=null?(last.benchPct>=0?"+":"")+fmt(last.benchPct,2)+"%":"—")+'</div></div></div>'
+      +'<table><tr><th>股票</th><th>股数</th><th>成本</th><th>买入日</th></tr>'+(rows||'<tr><td colspan="4" class="empty">暂无持仓</td></tr>')+'</table>';
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
 
@@ -166,8 +197,8 @@ async function loadWatchlist(){
   try{
     const j=await fetch('/api/watchlist-analysis').then(r=>r.json());
     if(!j.results){el.innerHTML='<div class="empty">'+(j.error||'暂无数据')+'</div>';return;}
-    const rows=j.results.map(w=>{const t=w.timing||{label:'观望',cls:'neutral'};return '<tr><td><b>'+esc(w.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+w.code+'</span></td><td>'+fmt(w.price)+'<br><span style="color:'+(w.pct>=0?'var(--up)':'var(--down)')+';font-size:11px">'+(w.pct>=0?'+':'')+fmt(w.pct,2)+'%</span></td><td><span class="badge '+clsMap[t.cls]+'">'+t.label+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td></tr>';}).join('');
-    el.innerHTML='<table><tr><th>股票</th><th>现价</th><th>买卖时机</th><th>信号</th><th>位置</th><th>情绪</th><th>增长</th></tr>'+rows+'</table>';
+    const rows=j.results.map(w=>{const t=w.timing||{label:'观望',cls:'neutral'};return '<tr><td><b>'+esc(w.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+w.code+'</span></td><td>'+fmt(w.price)+'<br><span style="color:'+(w.pct>=0?'var(--up)':'var(--down)')+';font-size:11px">'+(w.pct>=0?'+':'')+fmt(w.pct,2)+'%</span></td><td><span class="badge '+clsMap[t.cls]+'">'+t.label+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td><td style="font-size:12px;color:var(--dim)">'+esc(w.comment||'')+'</td></tr>';}).join('');
+    el.innerHTML='<table><tr><th>股票</th><th>现价</th><th>买卖时机</th><th>信号</th><th>位置</th><th>情绪</th><th>增长</th><th>理财师点评</th></tr>'+rows+'</table>';
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
 
@@ -183,6 +214,34 @@ const server = http.createServer(async (req, res) => {
     res.end(portalHTML());
     return;
   }
+  // 真实账户理财建议
+  if (url.pathname === '/api/advisor/real') {
+    try {
+      const a = advisorReal([]);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(a));
+      return;
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: e.message }));
+      return;
+    }
+  }
+
+  // 理财师建议
+  if (url.pathname === '/api/advisor/sim') {
+    try {
+      const a = advisorSim([]);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(a));
+      return;
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: e.message }));
+      return;
+    }
+  }
+
   // 本地完整分析（信号+位置+情绪+增长）
   if (url.pathname === '/api/analyze' && req.method === 'POST') {
     try {
@@ -229,7 +288,13 @@ const server = http.createServer(async (req, res) => {
           else if (p2 && p2.sellScore >= 55) { label = '注意止盈'; cls = 'sell'; }
           else if (s2.verdict === '买入' || s2.verdict === '关注') { label = '可关注'; cls = 'watch'; }
           else if (s2.verdict === '回避' || s2.verdict === '谨慎') { label = '回避/谨慎'; cls = 'caution'; }
-          return { code: it.code, name: res.meta.name, industry: it.industry, price: q.price, pct: q.pct, timing: { label, cls }, verdict: s2.verdict, score: s2.score, zone: p2.zone, sentiment: se.label, growth: g.label };
+          let comment = '';
+          if (s2.verdict === '买入' && p2 && p2.buyScore >= 40) comment = '低位+强信号，可重点关注';
+          else if (p2 && p2.sellScore >= 55) comment = '位置偏高，注意止盈风险';
+          else if (g && g.score >= 60) comment = '基本面高增长，可跟踪';
+          else if (s2.verdict === '回避') comment = '技术面弱，建议回避';
+          else comment = '信号中性，观望为主';
+          return { code: it.code, name: res.meta.name, industry: it.industry, price: q.price, pct: q.pct, timing: { label, cls }, verdict: s2.verdict, score: s2.score, zone: p2.zone, sentiment: se.label, growth: g.label, comment };
         } catch (e) { return null; }
       };
       const CONC = 2;
