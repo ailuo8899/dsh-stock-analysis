@@ -115,10 +115,9 @@ document.querySelectorAll(".topbar nav button").forEach(b=>{
     const v=b.dataset.view;
     document.getElementById("view-"+v).classList.add("active");
     if(v==="sim")loadSim(); if(v==="real")loadReal(); if(v==="watchlist")loadWatchlist(); if(v==="daily")loadDaily();
-});
-loadLeadersCards();
   });
 });
+loadLeadersCards();
 
 function timing(res){
   const s=res.signals,p=res.positionAnalysis,g=res.growth,q=res.quote;
@@ -140,7 +139,7 @@ async function loadLeadersCards(){
       const t=c.timing||{label:'观望',cls:'neutral'};
       const sup=(c.supports||[]).slice(-2).join("/")||"-";
       const res=(c.resistances||[]).slice(0,2).join("/")||"-";
-      return '<div class="lcard" onclick="openAnalyze(''+c.code+'')" title="点击查看 '+esc(c.name)+' 详细分析">'+
+      return '<div class="lcard" onclick="openAnalyze(\\''+c.code+'\\')" title="点击查看 '+esc(c.name)+' 详细分析">'+
         '<div class="lc-head"><span class="lc-name">'+esc(c.name)+'</span><span class="lc-ind">'+esc(c.industry||'')+'</span></div>'+
         '<div class="lc-code">'+c.code+'</div>'+
         '<div class="lc-price">'+fmt(c.price)+' <span class="lc-pct '+(c.pct>=0?'up':'down')+'">'+(c.pct>=0?'+':'')+fmt(c.pct,2)+'%</span></div>'+
@@ -213,7 +212,7 @@ async function loadSim(){
       const todayPl=h.todayPl||0;
       const todayPlPct=h.todayPlPct||0;
       const sharePct=h.mv&&simTotal2>0?(h.mv/simTotal2*100):0;
-      return '<tr style="cursor:pointer" onclick="openAnalyze(\''+h.code+'\')"><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td>'
+      return '<tr style="cursor:pointer" onclick="openAnalyze(\\''+h.code+'\\')"><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td>'
         +'<td style="color:'+(pl>=0?"var(--up)":"var(--down)")+'">'+(pl>=0?"+":"")+fmt(pl,0)+'<br><span style="font-size:11px">'+(plPct>=0?"+":"")+fmt(plPct,2)+'%</span></td>'
         +'<td style="color:'+(todayPl>=0?"var(--up)":"var(--down)")+'">'+(todayPl>=0?"+":"")+fmt(todayPl,0)+'<br><span style="font-size:11px">'+(todayPlPct>=0?"+":"")+fmt(todayPlPct,2)+'%</span></td>'
         +'<td style="font-size:12px">'+fmt(sharePct,1)+'%</td>'
@@ -248,7 +247,7 @@ async function loadReal(){
         +'<div style="font-size:13px">'+esc(ar.overall)+'</div></div>';
     }catch(e){}
     const rows=(acc.holdings||[]).map(h=>{
-      return '<tr style="cursor:pointer" onclick="openAnalyze(\''+h.code+'\')"><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+(h.buyDate||"-")+'</td></tr>';
+      return '<tr style="cursor:pointer" onclick="openAnalyze(\\''+h.code+'\\')"><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+(h.buyDate||"-")+'</td></tr>';
     }).join("");
     el.innerHTML=advice
       +'<div class="cards">'
@@ -266,7 +265,7 @@ async function loadWatchlist(){
   try{
     const j=await fetch('/api/watchlist-analysis').then(r=>r.json());
     if(!j.results){el.innerHTML='<div class="empty">'+(j.error||'暂无数据')+'</div>';return;}
-    const rows=j.results.map(w=>{const t=w.timing||{label:'观望',cls:'neutral'};return '<tr style="cursor:pointer" onclick="openAnalyze(\''+w.code+'\')"><td><b>'+esc(w.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+w.code+'</span></td><td>'+fmt(w.price)+'<br><span style="color:'+(w.pct>=0?'var(--up)':'var(--down)')+';font-size:11px">'+(w.pct>=0?'+':'')+fmt(w.pct,2)+'%</span></td><td><span class="badge '+clsMap[t.cls]+'">'+t.label+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td><td style="font-size:12px;color:var(--dim)">'+esc(w.comment||'')+'</td></tr>';}).join('');
+    const rows=j.results.map(w=>{const t=w.timing||{label:'观望',cls:'neutral'};return '<tr style="cursor:pointer" onclick="openAnalyze(\\''+w.code+'\\')"><td><b>'+esc(w.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+w.code+'</span></td><td>'+fmt(w.price)+'<br><span style="color:'+(w.pct>=0?'var(--up)':'var(--down)')+';font-size:11px">'+(w.pct>=0?'+':'')+fmt(w.pct,2)+'%</span></td><td><span class="badge '+clsMap[t.cls]+'">'+t.label+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td><td style="font-size:12px;color:var(--dim)">'+esc(w.comment||'')+'</td></tr>';}).join('');
     el.innerHTML='<table><tr><th>股票</th><th>现价</th><th>买卖时机</th><th>信号</th><th>位置</th><th>情绪</th><th>增长</th><th>理财师点评</th></tr>'+rows+'</table>';
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
@@ -291,7 +290,7 @@ async function loadDaily(){
       if(sim.holdings&&sim.holdings.length){
         html+='<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>浮盈亏</th><th>时机</th></tr>';
         for(const h of sim.holdings){
-          html+='<tr style="cursor:pointer" onclick="openAnalyze(\''+h.code+'\')"><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td><td style="color:'+(h.pl>=0?"var(--up)":"var(--down)")+'">'+(h.pl>=0?"+":"")+fmt(h.pl,0)+'（'+(h.plPct>=0?"+":"")+fmt(h.plPct,2)+'%）</td><td>'+(h.timing?esc(h.timing.label):"-")+'</td></tr>';
+          html+='<tr style="cursor:pointer" onclick="openAnalyze(\\''+h.code+'\\')"><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td><td style="color:'+(h.pl>=0?"var(--up)":"var(--down)")+'">'+(h.pl>=0?"+":"")+fmt(h.pl,0)+'（'+(h.plPct>=0?"+":"")+fmt(h.plPct,2)+'%）</td><td>'+(h.timing?esc(h.timing.label):"-")+'</td></tr>';
         }
         html+='</table>';
       } else html+='<div class="empty">空仓</div>';
@@ -300,7 +299,7 @@ async function loadDaily(){
     if(real&&real.holdings&&real.holdings.length){
       html+='<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>浮盈亏</th><th>时机</th></tr>';
       for(const h of real.holdings){
-        html+='<tr style="cursor:pointer" onclick="openAnalyze(\''+h.code+'\')"><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td><td style="color:'+(h.pl>=0?"var(--up)":"var(--down)")+'">'+(h.pl>=0?"+":"")+fmt(h.pl,0)+'（'+(h.plPct>=0?"+":"")+fmt(h.plPct,2)+'%）</td><td>'+(h.timing?esc(h.timing.label):"-")+'</td></tr>';
+        html+='<tr style="cursor:pointer" onclick="openAnalyze(\\''+h.code+'\\')"><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td><td style="color:'+(h.pl>=0?"var(--up)":"var(--down)")+'">'+(h.pl>=0?"+":"")+fmt(h.pl,0)+'（'+(h.plPct>=0?"+":"")+fmt(h.plPct,2)+'%）</td><td>'+(h.timing?esc(h.timing.label):"-")+'</td></tr>';
       }
       html+='</table>';
     } else html+='<div class="empty">暂无真实持仓</div>';
@@ -308,7 +307,7 @@ async function loadDaily(){
     if(wl&&wl.length){
       html+='<table><tr><th>股票</th><th>现价</th><th>买卖时机</th><th>信号</th><th>位置</th><th>情绪</th><th>增长</th></tr>';
       for(const w of wl){
-        html+='<tr style="cursor:pointer" onclick="openAnalyze(\''+w.code+'\')"><td><b>'+esc(w.name)+'</b> '+w.code+'</td><td>'+fmt(w.price)+'</td><td><span class="badge '+(w.timing?clsMap[w.timing.cls]||"b-neutral":"b-neutral")+'">'+(w.timing?esc(w.timing.label):"-")+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td></tr>';
+        html+='<tr style="cursor:pointer" onclick="openAnalyze(\\''+w.code+'\\')"><td><b>'+esc(w.name)+'</b> '+w.code+'</td><td>'+fmt(w.price)+'</td><td><span class="badge '+(w.timing?clsMap[w.timing.cls]||"b-neutral":"b-neutral")+'">'+(w.timing?esc(w.timing.label):"-")+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td></tr>';
       }
       html+='</table>';
     } else html+='<div class="empty">暂无自选</div>';
