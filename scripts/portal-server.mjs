@@ -14,6 +14,7 @@ const DSH_API = "http://127.0.0.1:3080";
 import { run as localFetchRun } from "./fetch.mjs";
 import { run as localAnalyzeRun } from "./analyze.mjs";
 import { advisorSim, advisorReal } from "./advisor.mjs";
+import { fetchQuotes } from "./quotes.mjs";
 
 // 产品门户 HTML（单页应用）
 function portalHTML() {
@@ -156,7 +157,7 @@ async function loadSim(){
         +'<td style="font-size:12px">'+fmt(sharePct,1)+'%</td>'
         +'<td style="color:var(--down);font-size:12px">'+(h.stopLoss?fmt(h.stopLoss):"-")+'</td>'
         +'<td style="color:var(--up);font-size:12px">'+(h.takeProfit?fmt(h.takeProfit):"-")+'</td>'
-        +'<td style="font-size:12px">'+esc(h.verdict||"-")+' '+fmt(h.score)+'</td></tr>';
+        +'<td style="font-size:12px">'+esc(h.verdict||"-")+' '+fmt(h.score)+'</td>'+'<td style="font-size:11px;color:var(--dim)">'+(h.source||'-')+'</td></tr>';
     }).join("");
     el.innerHTML=advice
       +'<div class="cards">'
@@ -164,7 +165,7 @@ async function loadSim(){
       +'<div class="card"><div class="k">累计盈亏</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?(last.pnl>=0?"+":"")+fmt(last.pnl,0)+"（"+(last.pnlPct>=0?"+":"")+fmt(last.pnlPct,2)+"%）":"-")+'</div></div>'
       +'<div class="card"><div class="k">现金</div><div class="v">'+fmt(acc.cash,0)+'</div></div>'
       +'<div class="card"><div class="k">持仓数</div><div class="v">'+(acc.holdings||[]).length+'/'+(acc.rules?acc.rules.maxHoldings:3)+'</div></div></div>'
-      +'<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>持仓盈亏</th><th>今日盈亏</th><th>占比</th><th>止损</th><th>止盈</th><th>信号</th></tr>'+(rows||'<tr><td colspan="8" class="empty">空仓</td></tr>')+'</table>';
+      +'<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>持仓盈亏</th><th>今日盈亏</th><th>占比</th><th>止损</th><th>止盈</th><th>信号</th><th>来源</th></tr>'+(rows||'<tr><td colspan="8" class="empty">空仓</td></tr>')+'</table>';
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
 
@@ -247,26 +248,34 @@ const server = http.createServer(async (req, res) => {
       const detail = async (holdings) => {
         const out = [];
         let totalValue = 0;
+        const codes = (holdings || []).map(h => h.code);
+        const quotes = codes.length ? await fetchQuotes(codes) : {};
         for (const h of holdings || []) {
           let price = h.costPrice, prevClose = null, verdict = '-', score = 0, zone = '-';
-          try {
-            const cached = '/tmp/an-' + h.code + '.json';
-            if (fsx.existsSync(cached)) {
-              const res = JSON.parse(fsx.readFileSync(cached, 'utf8'));
-              price = res.quote.price;
-              prevClose = res.quote.prevClose;
-              verdict = res.signals.verdict;
-              score = res.signals.score;
-              zone = res.positionAnalysis.zone;
-            }
-          } catch (e) {}
+          const q = quotes[String(h.code).replace(/^(sh|sz)/, '')];
+          if (q) {
+            price = q.price;
+            prevClose = q.prevClose;
+          } else {
+            try {
+              const cached = '/tmp/an-' + h.code + '.json';
+              if (fsx.existsSync(cached)) {
+                const res = JSON.parse(fsx.readFileSync(cached, 'utf8'));
+                price = res.quote.price;
+                prevClose = res.quote.prevClose;
+                verdict = res.signals.verdict;
+                score = res.signals.score;
+                zone = res.positionAnalysis.zone;
+              }
+            } catch (e) {}
+          }
           const mv = price * h.shares;
           const pl = (price - h.costPrice) * h.shares;
           const plPct = h.costPrice > 0 ? (price - h.costPrice) / h.costPrice * 100 : 0;
           const todayPl = prevClose ? (price - prevClose) * h.shares : 0;
           const todayPlPct = prevClose ? (price - prevClose) / prevClose * 100 : 0;
           totalValue += mv;
-          out.push({ code: h.code, name: h.name, shares: h.shares, costPrice: h.costPrice, price, prevClose, mv, pl, plPct, todayPl, todayPlPct, stopLoss: h.stopLoss, takeProfit: h.takeProfit, verdict, score, zone });
+          out.push({ code: h.code, name: h.name, shares: h.shares, costPrice: h.costPrice, price, prevClose, mv, pl, plPct, todayPl, todayPlPct, stopLoss: h.stopLoss, takeProfit: h.takeProfit, verdict, score, zone, source: q ? q.source : (prevClose ? 'cache' : 'cost') });
         }
         return { items: out, totalValue };
       };
