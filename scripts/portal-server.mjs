@@ -65,6 +65,7 @@ td{padding:12px 14px;border-bottom:1px solid var(--line)}
     <button data-view="sim">💰 模拟账户</button>
     <button data-view="real">💼 真实账户</button>
     <button data-view="watchlist">⭐ 自选股</button>
+    <button data-view="daily">📊 每日汇总</button>
   </nav>
 </div>
 <div class="wrap">
@@ -80,6 +81,7 @@ td{padding:12px 14px;border-bottom:1px solid var(--line)}
   <div class="view" id="view-sim"><div class="loading" id="simLoading">加载中…</div><div id="simContent"></div></div>
   <div class="view" id="view-real"><div class="loading" id="realLoading">加载中…</div><div id="realContent"></div></div>
   <div class="view" id="view-watchlist"><div class="loading" id="wlLoading">加载中…</div><div id="wlContent"></div></div>
+  <div class="view" id="view-daily"><div class="loading" id="dailyLoading">加载中…</div><div id="dailyContent"></div></div>
 </div>
 <script>
 const fmt=(v,d=2)=>v===null||v===undefined||isNaN(v)?"-":Number(v).toFixed(d);
@@ -94,7 +96,7 @@ document.querySelectorAll(".topbar nav button").forEach(b=>{
     b.classList.add("active");
     const v=b.dataset.view;
     document.getElementById("view-"+v).classList.add("active");
-    if(v==="sim")loadSim(); if(v==="real")loadReal(); if(v==="watchlist")loadWatchlist();
+    if(v==="sim")loadSim(); if(v==="real")loadReal(); if(v==="watchlist")loadWatchlist(); if(v==="daily")loadDaily();
   });
 });
 
@@ -210,6 +212,50 @@ async function loadWatchlist(){
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
 
+
+async function loadDaily(){
+  const el=document.getElementById("dailyContent");
+  el.innerHTML='<div class="loading">汇总加载中…（含模拟/真实/自选实时分析）</div>';
+  try{
+    const j=await fetch('/api/daily-summary').then(r=>r.json());
+    if(j.error){el.innerHTML='<div class="err">'+esc(j.error)+'</div>';return;}
+    const sim=j.sim, real=j.real, wl=j.watchlist;
+    let html='';
+    html+='<h2 style="font-size:16px;color:#3b82f6;margin:16px 0 8px">💰 模拟账户</h2>';
+    if(sim){
+      const last=sim.last;
+      html+='<div class="cards">'+
+        '<div class="card"><div class="k">总资产</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?fmt(last.totalValue,0):"-")+'</div></div>'+
+        '<div class="card"><div class="k">累计盈亏</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?(last.pnl>=0?"+":"")+fmt(last.pnl,0)+"（"+(last.pnlPct>=0?"+":"")+fmt(last.pnlPct,2)+"%）":"-")+'</div></div>'+
+        '<div class="card"><div class="k">沪深300</div><div class="v">'+(last&&last.benchPct!=null?(last.benchPct>=0?"+":"")+fmt(last.benchPct,2)+"%":"—")+'</div></div></div>';
+      if(sim.holdings&&sim.holdings.length){
+        html+='<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>浮盈亏</th><th>时机</th></tr>';
+        for(const h of sim.holdings){
+          html+='<tr><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td><td style="color:'+(h.pl>=0?"var(--up)":"var(--down)")+'">'+(h.pl>=0?"+":"")+fmt(h.pl,0)+'（'+(h.plPct>=0?"+":"")+fmt(h.plPct,2)+'%）</td><td>'+(h.timing?esc(h.timing.label):"-")+'</td></tr>';
+        }
+        html+='</table>';
+      } else html+='<div class="empty">空仓</div>';
+    } else html+='<div class="empty">模拟账户未初始化</div>';
+    html+='<h2 style="font-size:16px;color:#2ebd85;margin:16px 0 8px">💼 真实账户</h2>';
+    if(real&&real.holdings&&real.holdings.length){
+      html+='<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>浮盈亏</th><th>时机</th></tr>';
+      for(const h of real.holdings){
+        html+='<tr><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td><td style="color:'+(h.pl>=0?"var(--up)":"var(--down)")+'">'+(h.pl>=0?"+":"")+fmt(h.pl,0)+'（'+(h.plPct>=0?"+":"")+fmt(h.plPct,2)+'%）</td><td>'+(h.timing?esc(h.timing.label):"-")+'</td></tr>';
+      }
+      html+='</table>';
+    } else html+='<div class="empty">暂无真实持仓</div>';
+    html+='<h2 style="font-size:16px;color:#f5b942;margin:16px 0 8px">⭐ 自选股票</h2>';
+    if(wl&&wl.length){
+      html+='<table><tr><th>股票</th><th>现价</th><th>买卖时机</th><th>信号</th><th>位置</th><th>情绪</th><th>增长</th></tr>';
+      for(const w of wl){
+        html+='<tr><td><b>'+esc(w.name)+'</b> '+w.code+'</td><td>'+fmt(w.price)+'</td><td><span class="badge '+(w.timing?clsMap[w.timing.cls]||"b-neutral":"b-neutral")+'">'+(w.timing?esc(w.timing.label):"-")+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td></tr>';
+      }
+      html+='</table>';
+    } else html+='<div class="empty">暂无自选</div>';
+    el.innerHTML=html;
+  }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
+}
+
 </script>
 </body>
 </html>`;
@@ -228,6 +274,72 @@ const server = http.createServer(async (req, res) => {
       const a = advisorReal([]);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(a));
+      return;
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: e.message }));
+      return;
+    }
+  }
+
+  // 每日汇总（三部分，实时组合）
+  if (url.pathname === '/api/daily-summary') {
+    try {
+      const fsx = await import('node:fs');
+      const osx = await import('node:os');
+      const pathx = await import('node:path');
+      const dir = pathx.join(process.env.DSH_HOME || (osx.homedir() + '/.dsh'), 'storages', 'stock-sim');
+      const readJson = (f) => { try { return JSON.parse(fsx.readFileSync(pathx.join(dir, f), 'utf8')); } catch (e) { return null; } };
+      const sim = readJson('account.json');
+      const real = readJson('real-account.json');
+      const simCodes = (sim && sim.holdings || []).map(h => h.code);
+      const simQ = simCodes.length ? await fetchQuotes(simCodes) : {};
+      const simHoldings = (sim && sim.holdings || []).map(h => {
+        const q = simQ[String(h.code).replace(/^(sh|sz)/, '')];
+        const price = q ? q.price : h.costPrice;
+        const pl = (price - h.costPrice) * h.shares;
+        const plPct = h.costPrice > 0 ? (price - h.costPrice) / h.costPrice * 100 : 0;
+        let label = '持有', cls = 'neutral';
+        if (q && q.pct >= 5) { label = '注意止盈'; cls = 'sell'; }
+        else if (q && q.pct <= -3) { label = '观察'; cls = 'watch'; }
+        return { code: h.code, name: h.name, shares: h.shares, costPrice: h.costPrice, price, pl, plPct, timing: { label, cls } };
+      });
+      const simMv = simHoldings.reduce((s2, h) => s2 + h.price * h.shares, 0);
+      const simTotal = (sim ? sim.cash : 0) + simMv;
+      const simPnl = simTotal - (sim ? sim.capital : simTotal);
+      const simPnlPct = sim && sim.capital > 0 ? simPnl / sim.capital * 100 : 0;
+      const simLast = sim && sim.daily && sim.daily.length ? sim.daily[sim.daily.length - 1] : null;
+      const realCodes = (real && real.holdings || []).map(h => h.code);
+      const realQ = realCodes.length ? await fetchQuotes(realCodes) : {};
+      const realHoldings = (real && real.holdings || []).map(h => {
+        const q = realQ[String(h.code).replace(/^(sh|sz)/, '')];
+        const price = q ? q.price : h.costPrice;
+        const pl = (price - h.costPrice) * h.shares;
+        const plPct = h.costPrice > 0 ? (price - h.costPrice) / h.costPrice * 100 : 0;
+        return { code: h.code, name: h.name, shares: h.shares, costPrice: h.costPrice, price, pl, plPct };
+      });
+      let watchlist = [];
+      try {
+        const wlFile = pathx.join(dir, '..', 'stock-watchlist.json');
+        const wlRaw = fsx.existsSync(wlFile) ? JSON.parse(fsx.readFileSync(wlFile, 'utf8')) : [];
+        const codes = (wlRaw || []).map(it => it.code);
+        const wQ = codes.length ? await fetchQuotes(codes) : {};
+        watchlist = (wlRaw || []).map(it => {
+          const q = wQ[String(it.code).replace(/^(sh|sz)/, '')];
+          if (!q) return null;
+          let label = '观望', cls = 'neutral';
+          if (q.pct >= 5) { label = '追高风险'; cls = 'caution'; }
+          else if (q.pct >= 2) { label = '可关注'; cls = 'watch'; }
+          else if (q.pct <= -3) { label = '回调关注'; cls = 'watch'; }
+          return { code: it.code, name: q.name, industry: it.industry, price: q.price, pct: q.pct, timing: { label, cls }, verdict: '-', score: 0, zone: '-', sentiment: '-', growth: '-' };
+        }).filter(Boolean);
+      } catch (e) {}
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        sim: { capital: sim ? sim.capital : 0, cash: sim ? sim.cash : 0, holdings: simHoldings, last: simLast, totalValue: simTotal, pnl: simPnl, pnlPct: simPnlPct },
+        real: { holdings: realHoldings },
+        watchlist
+      }));
       return;
     } catch (e) {
       res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
