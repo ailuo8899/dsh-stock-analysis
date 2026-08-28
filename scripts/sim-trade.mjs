@@ -65,6 +65,19 @@ export async function run(argv) {
     // 实时分析确认（数据实时性保证）
     const { res } = await analyzeStock(args.code);
     const price = res.quote.price;
+    const pct = res.quote.pct || 0;
+    // 理财师风控：追高防护 / 信号门槛 / 高位拒绝（--force 可绕过）
+    const force = args.note && args.note.includes("--force");
+    const riskChecks = [];
+    if (pct >= 5) riskChecks.push("当日涨幅 " + fmt(pct, 1) + "% ≥5%（追高风险）");
+    if (res.signals.score < 60) riskChecks.push("信号分 " + res.signals.score + " <60");
+    if (res.positionAnalysis && res.positionAnalysis.buyScore < 40) riskChecks.push("位置买" + res.positionAnalysis.buyScore + " <40");
+    if (riskChecks.length && !force) {
+      console.error("🚫 风控拦截买入 " + args.code + "：" + riskChecks.join(";"));
+      console.error("   若确需买入请加 --force 参数（需人工确认）");
+      process.exit(1);
+    }
+    if (riskChecks.length) console.log("⚠️ 已绕过风控：" + riskChecks.join(";"));
     const budget = args.shares ? args.shares * price : acc.cash * acc.rules.perPosition;
     let shares = args.shares || Math.floor(budget / price / 100) * 100;
     if (shares < 100) { console.error("资金不足 100 股"); process.exit(1); }
