@@ -36,7 +36,7 @@ body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSys
 .topbar nav button{padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer;background:none;border:none;color:var(--dim);border-radius:8px}
 .topbar nav button:hover{color:var(--txt);background:var(--panel2)}
 .topbar nav button.active{color:var(--blue);background:rgba(59,130,246,.12)}
-.wrap{max-width:1100px;margin:0 auto;padding:24px}
+.wrap{max-width:1560px;margin:0 auto;padding:24px}
 .view{display:none} .view.active{display:block}
 h1{font-size:22px;margin-bottom:6px} .sub{color:var(--dim);font-size:13px;margin-bottom:20px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px}
@@ -62,17 +62,20 @@ td{padding:12px 14px;border-bottom:1px solid var(--line)}
 .pager button:disabled{opacity:.35;cursor:default}
 .pager .pg{color:var(--dim);font-size:12px}
 .pager .pg-now{color:var(--blue);font-weight:700}
-.lcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:border-color .15s,transform .15s}
-.lcard:hover{border-color:var(--blue);transform:translateY(-2px)}
-.lcard .lc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.lcard .lc-name{font-size:14px;font-weight:700}
-.lcard .lc-code{color:var(--dim);font-size:11px;margin-bottom:6px}
-.lcard .lc-ind{color:var(--dim);font-size:11px;background:var(--panel2);padding:2px 8px;border-radius:6px}
-.lcard .lc-price{font-size:16px;font-weight:700;margin-bottom:2px}
-.lcard .lc-pct{font-size:12px;margin-bottom:8px}
-.lcard .lc-row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim);margin-bottom:4px}
-.lcard .lc-row b{color:var(--txt)}
-.lcard .lc-signal{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.lcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;transition:border-color .15s,transform .15s;display:flex;flex-direction:column;gap:6px}
+.lcard:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.3)}
+.lcard .lc-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.lcard .lc-name{font-size:14px;font-weight:700;color:var(--txt)}
+.lcard .lc-code{color:var(--dim);font-size:10.5px}
+.lcard .lc-ind{color:var(--dim);font-size:10.5px;background:var(--panel2);padding:2px 8px;border-radius:6px;white-space:nowrap}
+.lcard .lc-price{display:flex;align-items:baseline;gap:8px;font-size:18px;font-weight:700}
+.lcard .lc-pct{font-size:12.5px;font-weight:600}
+.lcard .lc-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;margin-top:2px}
+.lcard .lc-grid .g{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim);padding:1px 0;border-bottom:1px dashed rgba(35,44,71,.5)}
+.lcard .lc-grid .g:last-child{border-bottom:none}
+.lcard .lc-grid .g b{color:var(--txt);font-weight:600}
+.lcard .lc-signal{margin-top:2px;padding-top:4px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+.lcard .lc-signal .t{font-size:10.5px;color:var(--dim);line-height:1.4}
 .empty{color:var(--dim);font-size:13px;padding:20px;text-align:center}
 </style>
 </head>
@@ -151,15 +154,18 @@ function renderLcPage(){
     const sup=(c.supports||[]).slice(-2).join("/")||"-";
     const res=(c.resistances||[]).slice(0,2).join("/")||"-";
     return '<div class="lcard" onclick="openAnalyze(\\''+c.code+'\\')" title="点击查看 '+esc(c.name)+' 详细分析">'+
-      '<div class="lc-head"><span class="lc-name">'+esc(c.name)+'</span><span class="lc-ind">'+esc(c.industry||'')+'</span></div>'+
-      '<div class="lc-code">'+c.code+'</div>'+
-      '<div class="lc-price">'+fmt(c.price)+' <span class="lc-pct '+(c.pct>=0?'up':'down')+'">'+(c.pct>=0?'+':'')+fmt(c.pct,2)+'%</span></div>'+
-      '<div class="lc-row"><span>信号</span><b>'+esc(c.verdict)+' '+c.score+'</b></div>'+
-      '<div class="lc-row"><span>位置</span><b>'+esc(c.zone)+'</b></div>'+
-      '<div class="lc-row"><span>情绪/增长</span><b>'+esc(c.sentiment)+' / '+esc(c.growth)+'</b></div>'+
-      '<div class="lc-row"><span>支撑</span><b style="color:var(--down)">'+sup+'</b></div>'+
-      '<div class="lc-row"><span>压力</span><b style="color:var(--up)">'+res+'</b></div>'+
-      '<div class="lc-signal"><span class="badge '+clsMap[t.cls]+'">'+esc(t.label)+'</span></div>'+
+      '<div class="lc-head"><span class="lc-name">'+esc(c.name)+' <span class="lc-code">'+c.code+'</span></span><span class="lc-ind">'+esc(c.industry||'')+'</span></div>'+
+      '<div class="lc-price">'+fmt(c.price)+' <span class="lc-pct '+(c.pct>=0?'up':'down')+'">'+(c.pct>=0?'+':'')+fmt(c.pct,2)+'%</span>'+
+      '<span style="margin-left:auto;font-size:11px;color:var(--dim)">信号 '+esc(c.verdict)+' '+c.score+'</span></div>'+
+      '<div class="lc-grid">'+
+      '<div class="g"><span>位置</span><b>'+esc(c.zone)+'</b></div>'+
+      '<div class="g"><span>买卖时机</span><b><span class="badge '+clsMap[t.cls]+'">'+esc(t.label)+'</span></b></div>'+
+      '<div class="g"><span>情绪</span><b>'+esc(c.sentiment)+'</b></div>'+
+      '<div class="g"><span>增长</span><b>'+esc(c.growth)+'</b></div>'+
+      '<div class="g"><span>支撑</span><b style="color:var(--down)">'+sup+'</b></div>'+
+      '<div class="g"><span>压力</span><b style="color:var(--up)">'+res+'</b></div>'+
+      '</div>'+
+      '<div class="lc-signal"><span class="t">'+esc(c.summary||'')+'</span></div>'+
       '</div>';
   }).join('');
   let pager='';
