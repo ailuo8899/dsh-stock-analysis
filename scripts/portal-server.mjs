@@ -55,6 +55,18 @@ td{padding:12px 14px;border-bottom:1px solid var(--line)}
 .search-row button{padding:12px 24px;border:none;border-radius:8px;background:var(--blue);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
 .loading{color:var(--dim);font-size:13px;padding:20px;text-align:center}
 .err{background:rgba(240,72,62,.1);border:1px solid rgba(240,72,62,.4);color:var(--up);padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px}
+.lcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:16px}
+.lcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:border-color .15s,transform .15s}
+.lcard:hover{border-color:var(--blue);transform:translateY(-2px)}
+.lcard .lc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.lcard .lc-name{font-size:14px;font-weight:700}
+.lcard .lc-code{color:var(--dim);font-size:11px;margin-bottom:6px}
+.lcard .lc-ind{color:var(--dim);font-size:11px;background:var(--panel2);padding:2px 8px;border-radius:6px}
+.lcard .lc-price{font-size:16px;font-weight:700;margin-bottom:2px}
+.lcard .lc-pct{font-size:12px;margin-bottom:8px}
+.lcard .lc-row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim);margin-bottom:4px}
+.lcard .lc-row b{color:var(--txt)}
+.lcard .lc-signal{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
 .empty{color:var(--dim);font-size:13px;padding:20px;text-align:center}
 </style>
 </head>
@@ -78,6 +90,11 @@ td{padding:12px 14px;border-bottom:1px solid var(--line)}
       <button onclick="doAnalyze()">分析</button>
     </div>
     <div id="analyzeResult"></div>
+    <div style="margin-top:28px;display:flex;align-items:center;gap:8px">
+      <h2 style="font-size:16px;color:var(--gold);margin:0">🏆 行业龙头速览</h2>
+      <span style="color:var(--dim);font-size:12px">点击卡片查看详细分析</span>
+    </div>
+    <div id="leadersCards" class="lcards"><div class="loading">龙头分析加载中…</div></div>
   </div>
   <div class="view" id="view-sim"><div class="loading" id="simLoading">加载中…</div><div id="simContent"></div></div>
   <div class="view" id="view-real"><div class="loading" id="realLoading">加载中…</div><div id="realContent"></div></div>
@@ -98,6 +115,8 @@ document.querySelectorAll(".topbar nav button").forEach(b=>{
     const v=b.dataset.view;
     document.getElementById("view-"+v).classList.add("active");
     if(v==="sim")loadSim(); if(v==="real")loadReal(); if(v==="watchlist")loadWatchlist(); if(v==="daily")loadDaily();
+});
+loadLeadersCards();
   });
 });
 
@@ -111,6 +130,32 @@ function timing(res){
 }
 
 // 点击股票 → 切到分析 tab 并自动分析
+// 龙头股票卡片（简洁分析报告）
+async function loadLeadersCards(){
+  const el=document.getElementById("leadersCards");
+  try{
+    const j=await fetch('/api/leaders-cards').then(r=>r.json());
+    if(!j.results||!j.results.length){el.innerHTML='<div class="empty">龙头数据暂不可用（可能限流）</div>';return;}
+    const cards=j.results.map(c=>{
+      const t=c.timing||{label:'观望',cls:'neutral'};
+      const sup=(c.supports||[]).slice(-2).join("/")||"-";
+      const res=(c.resistances||[]).slice(0,2).join("/")||"-";
+      return '<div class="lcard" onclick="openAnalyze(''+c.code+'')" title="点击查看 '+esc(c.name)+' 详细分析">'+
+        '<div class="lc-head"><span class="lc-name">'+esc(c.name)+'</span><span class="lc-ind">'+esc(c.industry||'')+'</span></div>'+
+        '<div class="lc-code">'+c.code+'</div>'+
+        '<div class="lc-price">'+fmt(c.price)+' <span class="lc-pct '+(c.pct>=0?'up':'down')+'">'+(c.pct>=0?'+':'')+fmt(c.pct,2)+'%</span></div>'+
+        '<div class="lc-row"><span>信号</span><b>'+esc(c.verdict)+' '+c.score+'</b></div>'+
+        '<div class="lc-row"><span>位置</span><b>'+esc(c.zone)+'</b></div>'+
+        '<div class="lc-row"><span>情绪/增长</span><b>'+esc(c.sentiment)+' / '+esc(c.growth)+'</b></div>'+
+        '<div class="lc-row"><span>支撑</span><b style="color:var(--down)">'+sup+'</b></div>'+
+        '<div class="lc-row"><span>压力</span><b style="color:var(--up)">'+res+'</b></div>'+
+        '<div class="lc-signal"><span class="badge '+clsMap[t.cls]+'">'+esc(t.label)+'</span></div>'+
+        '</div>';
+    }).join('');
+    el.innerHTML=cards+(j.cached?'<div style="grid-column:1/-1;color:var(--dim);font-size:11px">已缓存 · 60秒自动刷新</div>':'');
+  }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
+}
+
 function openAnalyze(code){
   document.querySelectorAll(".topbar nav button").forEach(function(x){x.classList.remove("active");});
   document.querySelectorAll(".view").forEach(function(v){v.classList.remove("active");});
@@ -275,6 +320,8 @@ async function loadDaily(){
 </body>
 </html>`;
 }
+
+let leadersCache = null; // 龙头卡片缓存
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
@@ -559,6 +606,77 @@ const server = http.createServer(async (req, res) => {
       }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ results }));
+      return;
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: e.message }));
+      return;
+    }
+  }
+
+  // 龙头股票卡片（简洁分析，60秒缓存）
+  if (url.pathname === '/api/leaders-cards') {
+    try {
+      const now = Date.now();
+      if (leadersCache && now - leadersCache.ts < 60000) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ results: leadersCache.results, cached: true }));
+        return;
+      }
+      const w = await fetch(DSH_API + '/api/stock/leaders').then(r => r.json());
+      const list = (w.leaders || []).slice(0, 16); // 代表性龙头
+      const results = [];
+      const analyzeOne = async (it) => {
+        try {
+          let analysis = null;
+          try {
+            const tmp = '/tmp/portal-ld-' + it.code + '-' + Date.now() + '.json';
+            await localFetchRun([it.code, '--days', '90', '--out', tmp]);
+            analysis = await localAnalyzeRun([tmp]);
+          } catch (e) { /* fallthrough */ }
+          if (!analysis) {
+            const q0 = await fetchQuoteOne(it.code);
+            if (!q0) return null;
+            analysis = {
+              meta: { code: it.code, name: q0.name },
+              quote: { price: q0.price, pct: q0.pct, prevClose: q0.prevClose },
+              signals: { score: 0, verdict: '观望', factors: [] },
+              positionAnalysis: { zone: '-', buyScore: 0, sellScore: 0 },
+              sentiment: { label: '-', score: 0 },
+              growth: { label: '-', score: 0 },
+              levels: { supports: [], resistances: [] },
+              degraded: true, source: q0.source,
+            };
+          }
+          const s2 = analysis.signals, p2 = analysis.positionAnalysis, se = analysis.sentiment, g = analysis.growth, q = analysis.quote;
+          let label = '观望', cls = 'neutral';
+          if (s2.verdict === '买入' && p2 && p2.buyScore >= 40 && g && g.score >= 30 && q.pct < 5) { label = '可买入'; cls = 'buy'; }
+          else if (p2 && p2.sellScore >= 55) { label = '注意止盈'; cls = 'sell'; }
+          else if (s2.verdict === '买入' || s2.verdict === '关注') { label = '可关注'; cls = 'watch'; }
+          else if (s2.verdict === '回避' || s2.verdict === '谨慎') { label = '回避/谨慎'; cls = 'caution'; }
+          return {
+            code: it.code, name: analysis.meta.name, industry: it.industry,
+            price: q.price, pct: q.pct,
+            timing: { label, cls }, verdict: s2.verdict, score: s2.score,
+            zone: p2.zone, buyScore: p2.buyScore, sellScore: p2.sellScore,
+            sentiment: se.label, sentimentScore: se.score,
+            growth: g.label, growthScore: g.score,
+            supports: (analysis.levels && analysis.levels.supports || []).map(x => x.price),
+            resistances: (analysis.levels && analysis.levels.resistances || []).map(x => x.price),
+            summary: (s2.summary || '').slice(0, 80),
+            degraded: analysis.degraded || false, source: analysis.source || 'eastmoney'
+          };
+        } catch (e) { return null; }
+      };
+      const CONC = 4;
+      for (let i = 0; i < list.length; i += CONC) {
+        const batch = list.slice(i, i + CONC);
+        const done = await Promise.all(batch.map(analyzeOne));
+        results.push(...done.filter(Boolean));
+      }
+      leadersCache = { ts: Date.now(), results };
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ results, cached: false }));
       return;
     } catch (e) {
       res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
