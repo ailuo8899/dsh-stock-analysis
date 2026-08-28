@@ -277,31 +277,46 @@ async function loadReal(){
   const el=document.getElementById("realContent");
   el.innerHTML='<div class="loading">加载中…</div>';
   try{
-    const j=await fetch(DSH+"/api/stock/accounts").then(r=>r.json());
-    const acc=j.real;
-    if(!acc||!(acc.holdings||[]).length){el.innerHTML='<div class="empty">暂无真实持仓</div>';return;}
-    const last=acc.daily&&acc.daily.length?acc.daily[acc.daily.length-1]:null;
+    const j=await fetch('/api/account/detail').then(r=>r.json());
+    const items=j.real&&j.real.items||[];
+    if(!items.length){el.innerHTML='<div class="empty">暂无真实持仓</div>';return;}
+    const totalValue=j.real.totalValue||0;
+    const totalCost=items.reduce((s2,h)=>s2+h.costPrice*h.shares,0);
+    const totalPl=totalValue-totalCost;
+    const totalPlPct=totalCost>0?totalPl/totalCost*100:0;
+    const todayTotalPl=items.reduce((s2,h)=>s2+(h.todayPl||0),0);
     let advice='';
     try{
       const ar=await fetch('/api/advisor/real').then(r=>r.json());
       advice='<div style="background:rgba(46,189,133,.08);border:1px solid rgba(46,189,133,.3);border-radius:12px;padding:14px;margin-bottom:16px">'
         +'<div style="font-size:13px;font-weight:700;color:#2ebd85;margin-bottom:6px">🧑‍💼 理财师建议</div>'
-        +'<div style="font-size:13px;margin-bottom:4px"><b>风险等级：</b>'+esc(ar.riskLevel||"-")+'</div>'
+        +'<div style="font-size:13px;margin-bottom:4px"><b>风险等级：</b>'+esc(ar.riskLevel||"-")+' ｜ <b>仓位：</b>'+esc(ar.positionRisk&&ar.positionRisk.level||"-")+'</div>'
+        +'<div style="font-size:12px;color:var(--dim);margin-bottom:4px">'+esc(ar.concentration&&ar.concentration.note||"")+'</div>'
         +'<div style="font-size:13px">'+esc(ar.overall)+'</div></div>';
     }catch(e){}
-    const rows=(acc.holdings||[]).map(h=>{
-      return '<tr style="cursor:pointer" onclick="openAnalyze(\\''+h.code+'\\')"><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+(h.buyDate||"-")+'</td></tr>';
+    const rows=items.map(h=>{
+      const pl=h.pl||0, plPct=h.plPct||0;
+      const todayPl=h.todayPl||0, todayPlPct=h.todayPlPct||0;
+      const sharePct=totalValue>0?(h.mv||0)/totalValue*100:0;
+      return '<tr style="cursor:pointer" onclick="openAnalyze(\\''+h.code+'\\')"><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td>'
+        +'<td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'<br><span style="color:var(--dim);font-size:11px">'+(h.prevClose?"昨收 "+fmt(h.prevClose):"")+'</span></td>'
+        +'<td style="color:'+(todayPl>=0?"var(--up)":"var(--down)")+'">'+(todayPl>=0?"+":"")+fmt(todayPl,0)+'<br><span style="font-size:11px">'+(todayPlPct>=0?"+":"")+fmt(todayPlPct,2)+'%</span></td>'
+        +'<td style="color:'+(pl>=0?"var(--up)":"var(--down)")+'">'+(pl>=0?"+":"")+fmt(pl,0)+'<br><span style="font-size:11px">'+(plPct>=0?"+":"")+fmt(plPct,2)+'%</span></td>'
+        +'<td>'+fmt(h.mv,0)+'<br><span style="font-size:11px;color:var(--dim)">'+fmt(sharePct,1)+'%</span></td>'
+        +'<td style="color:var(--down);font-size:12px">'+fmt(h.stopLoss||"-")+'</td>'
+        +'<td style="color:var(--up);font-size:12px">'+fmt(h.takeProfit||"-")+'</td>'
+        +'<td style="font-size:12px">'+esc(h.verdict||"-")+' '+fmt(h.score||0)+'<br><span style="font-size:10.5px;color:var(--dim)">'+esc(h.zone||"")+'</span></td>'
+        +'<td style="font-size:11px;color:var(--dim)">'+(h.source||"-")+'</td></tr>';
     }).join("");
     el.innerHTML=advice
       +'<div class="cards">'
-      +'<div class="card"><div class="k">持仓市值</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?fmt(last.holdingsValue,0):"-")+'</div></div>'
-      +'<div class="card"><div class="k">浮动盈亏</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?(last.pnl>=0?"+":"")+fmt(last.pnl,0)+"（"+(last.pnlPct>=0?"+":"")+fmt(last.pnlPct,2)+"%）":"-")+'</div></div>'
-      +'<div class="card"><div class="k">持仓成本</div><div class="v">'+(last?fmt(last.costValue,0):"-")+'</div></div>'
-      +'<div class="card"><div class="k">沪深300</div><div class="v">'+(last&&last.benchPct!=null?(last.benchPct>=0?"+":"")+fmt(last.benchPct,2)+"%":"—")+'</div></div></div>'
-      +'<table><tr><th>股票</th><th>股数</th><th>成本</th><th>买入日</th></tr>'+(rows||'<tr><td colspan="4" class="empty">暂无持仓</td></tr>')+'</table>';
+      +'<div class="card"><div class="k">持仓市值</div><div class="v">'+fmt(totalValue,0)+'</div></div>'
+      +'<div class="card"><div class="k">浮动盈亏</div><div class="v '+(totalPl>=0?"up":"down")+'">'+(totalPl>=0?"+":"")+fmt(totalPl,0)+"（"+(totalPlPct>=0?"+":"")+fmt(totalPlPct,2)+"%）"+'</div></div>'
+      +'<div class="card"><div class="k">今日盈亏</div><div class="v '+(todayTotalPl>=0?"up":"down")+'">'+(todayTotalPl>=0?"+":"")+fmt(todayTotalPl,0)+'</div></div>'
+      +'<div class="card"><div class="k">持仓成本</div><div class="v">'+fmt(totalCost,0)+'</div></div></div>'
+      +'<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>今日盈亏</th><th>持仓盈亏</th><th>市值/占比</th><th>止损</th><th>止盈</th><th>信号</th><th>来源</th></tr>'+(rows||'<tr><td colspan="11" class="empty">暂无持仓</td></tr>')+'</table>';
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
-
 async function loadWatchlist(){
   const el=document.getElementById('wlContent');
   el.innerHTML='<div class="loading">加载中…</div>';
@@ -490,22 +505,56 @@ const server = http.createServer(async (req, res) => {
         const codes = (holdings || []).map(h => h.code);
         const quotes = codes.length ? await fetchQuotes(codes) : {};
         for (const h of holdings || []) {
-          let price = h.costPrice, prevClose = null, verdict = '-', score = 0, zone = '-';
+          let price = h.costPrice, prevClose = null, verdict = '-', score = 0, zone = '-', bias = '-';
+          let supports = [], resistances = [], sentimentLabel = '-', sentimentScore = 0, growthLabel = '-', growthScore = 0;
           const q = quotes[String(h.code).replace(/^(sh|sz)/, '')];
-          if (q) {
-            price = q.price;
-            prevClose = q.prevClose;
-          } else {
-            try {
-              const cached = '/tmp/an-' + h.code + '.json';
-              if (fsx.existsSync(cached)) {
-                const res = JSON.parse(fsx.readFileSync(cached, 'utf8'));
-                price = res.quote.price;
-                prevClose = res.quote.prevClose;
-                verdict = res.signals.verdict;
-                score = res.signals.score;
-                zone = res.positionAnalysis.zone;
+          // 尝试读分析缓存（有信号/位置/支撑压力）
+          try {
+            const cached = '/tmp/an-' + h.code + '.json';
+            if (fsx.existsSync(cached)) {
+              const res = JSON.parse(fsx.readFileSync(cached, 'utf8'));
+              if (res.quote) {
+                if (q) { price = q.price; prevClose = q.prevClose; } else { price = res.quote.price; prevClose = res.quote.prevClose; }
+                verdict = res.signals?.verdict || '-';
+                score = res.signals?.score || 0;
+                zone = res.positionAnalysis?.zone || '-';
+                bias = res.positionAnalysis?.bias || '-';
+                supports = (res.levels?.supports || []).map(x => x.price);
+                resistances = (res.levels?.resistances || []).map(x => x.price);
+                sentimentLabel = res.sentiment?.label || '-';
+                sentimentScore = res.sentiment?.score || 0;
+                growthLabel = res.growth?.label || '-';
+                growthScore = res.growth?.score || 0;
               }
+            }
+          } catch (e) {}
+          // 缓存无信号时现场分析（本地引擎，东财K线→腾讯/新浪兜底）并写缓存
+          if (verdict === '-') {
+            try {
+              const tmp = '/tmp/an-' + h.code + '-' + Date.now() + '.json';
+              await localFetchRun([h.code, '--days', '90', '--out', tmp]);
+              const res = await localAnalyzeRun([tmp, '--out', tmp + '.res.json']);
+              if (res && res.quote) {
+                const cachePath = '/tmp/an-' + h.code + '.json';
+                fsx.writeFileSync(cachePath, JSON.stringify(res, null, 2), 'utf8');
+                if (q) { price = q.price; prevClose = q.prevClose; } else { price = res.quote.price; prevClose = res.quote.prevClose; }
+                verdict = res.signals?.verdict || '-';
+                score = res.signals?.score || 0;
+                zone = res.positionAnalysis?.zone || '-';
+                bias = res.positionAnalysis?.bias || '-';
+                supports = (res.levels?.supports || []).map(x => x.price);
+                resistances = (res.levels?.resistances || []).map(x => x.price);
+                sentimentLabel = res.sentiment?.label || '-';
+                sentimentScore = res.sentiment?.score || 0;
+                growthLabel = res.growth?.label || '-';
+                growthScore = res.growth?.score || 0;
+              }
+            } catch (e2) {}
+          }
+          if (!q && !prevClose) {
+            try {
+              const q0 = quotes[String(h.code).replace(/^(sh|sz)/, '')];
+              if (q0) { price = q0.price; prevClose = q0.prevClose; }
             } catch (e) {}
           }
           const mv = price * h.shares;
@@ -514,7 +563,10 @@ const server = http.createServer(async (req, res) => {
           const todayPl = prevClose ? (price - prevClose) * h.shares : 0;
           const todayPlPct = prevClose ? (price - prevClose) / prevClose * 100 : 0;
           totalValue += mv;
-          out.push({ code: h.code, name: h.name, shares: h.shares, costPrice: h.costPrice, price, prevClose, mv, pl, plPct, todayPl, todayPlPct, stopLoss: h.stopLoss, takeProfit: h.takeProfit, verdict, score, zone, source: q ? q.source : (prevClose ? 'cache' : 'cost') });
+          // 止损止盈：优先持仓设定，否则按支撑/压力或默认 -8%/+15%
+          const stopLoss = h.stopLoss || (supports.length ? supports[0] : Number((h.costPrice * 0.92).toFixed(2)));
+          const takeProfit = h.takeProfit || (resistances.length ? resistances[resistances.length - 1] : Number((h.costPrice * 1.15).toFixed(2)));
+          out.push({ code: h.code, name: h.name, shares: h.shares, costPrice: h.costPrice, price, prevClose, mv, pl, plPct, todayPl, todayPlPct, stopLoss, takeProfit, verdict, score, zone, bias, supports, resistances, sentimentLabel, sentimentScore, growthLabel, growthScore, source: q ? q.source : (prevClose ? 'cache' : 'cost') });
         }
         return { items: out, totalValue };
       };
