@@ -283,11 +283,24 @@ tr:last-child td{border-bottom:none}
 .pos-advice b{color:var(--txt)}
 .disc{color:var(--dim);font-size:12px;margin-top:24px;padding-top:14px;border-top:1px solid var(--line)}
 .senti-head{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.navbar{display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
+.navbar a{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9px;font-size:13px;font-weight:600;text-decoration:none;border:1px solid var(--line);background:var(--panel);color:var(--txt)}
+.navbar a:hover{border-color:var(--blue);color:var(--blue)}
+.navbar a.nav-primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.navbar a.nav-primary:hover{filter:brightness(1.15)}
+.navbar .nav-spacer{flex:1}
+.navbar .nav-note{color:var(--dim);font-size:12px}
 .senti-score{font-size:30px;font-weight:700}
 .senti-label{font-size:14px;padding:3px 12px;border-radius:6px}
 </style>
 </head>
 <body><div class="wrap">
+  <nav class="navbar">
+    <a href="screen-board.html" target="_blank" class="nav-primary">📊 今日推荐榜</a>
+    <a href="#" onclick="window.open(location.href,'_blank');return false">↗ 新窗口打开</a>
+    <span class="nav-spacer"></span>
+    <span class="nav-note">单股分析报告</span>
+  </nav>
   <div class="head">
     <div>
       <h1>${esc(m.name)} <span style="color:var(--dim);font-size:20px">${m.code}</span></h1>
