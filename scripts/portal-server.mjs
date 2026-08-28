@@ -288,11 +288,22 @@ async function loadReal(){
     let advice='';
     try{
       const ar=await fetch('/api/advisor/real').then(r=>r.json());
+      const actCls={buy:'#f0483e',hold:'#8a93b2',reduce:'#3b82f6',stop:'#f0483e',take:'#2ebd85',watch:'#f5b942'};
+      const actTxt={buy:'加仓/持有',hold:'持有',reduce:'减仓',stop:'止损',take:'止盈',watch:'观察'};
+      const stockItems=(ar.perStock||[]).map(x=>{
+        const reasons=(x.reasons||[]).map(r=>'<span style="display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:1px 8px;font-size:11px;margin:2px 4px 0 0;color:var(--dim)">'+esc(r)+'</span>').join('');
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">'
+          +'<span style="font-weight:700;font-size:13px;min-width:64px">'+esc(x.name)+'</span>'
+          +'<span style="font-size:13px">'+fmt(x.price)+'（'+(x.plPct>=0?'+':'')+fmt(x.plPct,1)+'%）</span>'
+          +'<span style="font-size:12px;color:var(--dim)">信号 '+esc(x.verdict)+' '+x.score+' · '+esc(x.zone)+'</span>'
+          +'<span style="color:'+(actCls[x.action]||'#8a93b2')+';font-weight:700;font-size:13px;margin-left:auto">'+esc(actTxt[x.action]||x.action)+'</span>'
+          +'</div><div style="padding:2px 0 6px 74px">'+reasons+'</div>';
+      }).join('');
       advice='<div style="background:rgba(46,189,133,.08);border:1px solid rgba(46,189,133,.3);border-radius:12px;padding:14px;margin-bottom:16px">'
         +'<div style="font-size:13px;font-weight:700;color:#2ebd85;margin-bottom:6px">🧑‍💼 理财师建议</div>'
-        +'<div style="font-size:13px;margin-bottom:4px"><b>风险等级：</b>'+esc(ar.riskLevel||"-")+' ｜ <b>仓位：</b>'+esc(ar.positionRisk&&ar.positionRisk.level||"-")+'</div>'
-        +'<div style="font-size:12px;color:var(--dim);margin-bottom:4px">'+esc(ar.concentration&&ar.concentration.note||"")+'</div>'
-        +'<div style="font-size:13px">'+esc(ar.overall)+'</div></div>';
+        +'<div style="font-size:13px;margin-bottom:4px"><b>风险等级：</b>'+esc(ar.riskLevel||"-")+' ｜ <b>仓位：</b>'+esc(ar.positionRisk&&ar.positionRisk.level||"-")+' ｜ <b>集中度：</b>'+esc(ar.conc&&ar.conc.note||"")+'</div>'
+        +'<div style="font-size:13px;margin-bottom:10px">'+esc(ar.overall)+'</div>'
+        +'<div style="font-size:12px;font-weight:700;color:var(--dim);margin-bottom:2px">📌 逐股建议</div>'+stockItems+'</div>';
     }catch(e){}
     const rows=items.map(h=>{
       const pl=h.pl||0, plPct=h.plPct||0;
@@ -387,10 +398,50 @@ const server = http.createServer(async (req, res) => {
     res.end(portalHTML());
     return;
   }
-  // 真实账户理财建议
+  // 真实账户理财建议（逐股分析）
   if (url.pathname === '/api/advisor/real') {
     try {
-      const a = advisorReal([]);
+      // 复用 account/detail 的实时+信号数据
+      const fsx = await import('node:fs');
+      const osx = await import('node:os');
+      const pathx = await import('node:path');
+      const dir = pathx.join(process.env.DSH_HOME || (osx.homedir() + '/.dsh'), 'storages', 'stock-sim');
+      const readJson = (f) => { try { return JSON.parse(fsx.readFileSync(pathx.join(dir, f), 'utf8')); } catch (e) { return null; } };
+      const real = readJson('real-account.json');
+      const holdings = real && real.holdings || [];
+      // 逐股取完整分析（本地引擎，带缓存）
+      const enriched = [];
+      for (const h of holdings) {
+        try {
+          const tmp = '/tmp/an-' + h.code + '.json';
+          let res = null;
+          if (fsx.existsSync(tmp)) { try { res = JSON.parse(fsx.readFileSync(tmp, 'utf8')); } catch (e) {} }
+          if (!res || !res.signals) {
+            const fTmp = '/tmp/adv-' + h.code + '-' + Date.now() + '.json';
+            await localFetchRun([h.code, '--days', '90', '--out', fTmp]);
+            res = await localAnalyzeRun([fTmp, '--out', fTmp + '.res.json']);
+            fsx.writeFileSync(tmp, JSON.stringify(res, null, 2), 'utf8');
+          }
+          const q0 = await fetchQuoteOne(h.code).catch(() => null);
+          const price = q0 ? q0.price : (res && res.quote ? res.quote.price : h.costPrice);
+          enriched.push({
+            code: h.code, name: h.name, shares: h.shares, costPrice: h.costPrice, price,
+            pl: (price - h.costPrice) * h.shares,
+            plPct: h.costPrice > 0 ? (price - h.costPrice) / h.costPrice * 100 : 0,
+            stopLoss: h.stopLoss || (res && res.levels && res.levels.supports && res.levels.supports.length ? res.levels.supports[0].price : Number((h.costPrice * 0.92).toFixed(2))),
+            takeProfit: h.takeProfit || (res && res.levels && res.levels.resistances && res.levels.resistances.length ? res.levels.resistances[res.levels.resistances.length-1].price : Number((h.costPrice * 1.15).toFixed(2))),
+            verdict: res && res.signals ? res.signals.verdict : '-',
+            score: res && res.signals ? res.signals.score : 0,
+            zone: res && res.positionAnalysis ? res.positionAnalysis.zone : '-',
+            bias: res && res.positionAnalysis ? res.positionAnalysis.bias : '-',
+            sentimentLabel: res && res.sentiment ? res.sentiment.label : '-',
+            growthLabel: res && res.growth ? res.growth.label : '-'
+          });
+        } catch (e) {
+          enriched.push({ code: h.code, name: h.name, shares: h.shares, costPrice: h.costPrice, price: h.costPrice, verdict: '-', score: 0, zone: '-' });
+        }
+      }
+      const a = advisorReal(enriched);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(a));
       return;
