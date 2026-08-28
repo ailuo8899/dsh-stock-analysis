@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>贵州茅台 600519 · 股票分析报告</title>
+<style>
+:root{--bg:#0b0f1d;--panel:#121829;--panel2:#0e1424;--line:#232c47;--txt:#e6eaf5;--dim:#8a93b2;--up:#f0483e;--down:#2ebd85;--gold:#f5b942;--blue:#3b82f6;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;padding:24px;line-height:1.55}
+.wrap{max-width:1080px;margin:0 auto}
+.head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.head h1{font-size:26px;letter-spacing:.5px}
+.head .sub{color:var(--dim);font-size:14px;margin-top:4px}
+.price-big{font-size:38px;font-weight:700;margin-left:auto;text-align:right}
+.price-big .pct{font-size:18px;margin-left:8px}
+.up{color:var(--up)} .down{color:var(--down)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.card .k{color:var(--dim);font-size:12px;margin-bottom:4px}
+.card .v{font-size:17px;font-weight:600}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:18px}
+.panel h2{font-size:15px;color:var(--dim);font-weight:600;margin-bottom:14px;letter-spacing:1px}
+.chart{width:100%;height:auto;display:block;background:#0f1424;border-radius:10px}
+.vgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:860px){.vgrid{grid-template-columns:1fr}}
+.verdict{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.vbadge{font-size:20px;font-weight:700;padding:8px 20px;border-radius:10px}
+.vbadge.buy{background:rgba(240,72,62,.16);color:var(--up);border:1px solid rgba(240,72,62,.4)}
+.vbadge.watch{background:rgba(245,185,66,.14);color:var(--gold);border:1px solid rgba(245,185,66,.4)}
+.vbadge.neutral{background:rgba(138,147,178,.14);color:var(--dim);border:1px solid rgba(138,147,178,.4)}
+.vbadge.caution{background:rgba(59,130,246,.14);color:var(--blue);border:1px solid rgba(59,130,246,.4)}
+.vbadge.sell{background:rgba(46,189,133,.16);color:var(--down);border:1px solid rgba(46,189,133,.4)}
+.scorebar{flex:1;height:10px;background:linear-gradient(90deg,var(--down),#6b7280 50%,var(--up));border-radius:6px;position:relative}
+.scorebar .pin{position:absolute;top:-4px;width:4px;height:18px;background:#fff;border-radius:2px;transform:translateX(-2px)}
+.vsum{color:var(--dim);font-size:14px}
+.factors{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:860px){.factors{grid-template-columns:1fr}}
+.factor{display:flex;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel2)}
+.f-icon{font-size:14px;width:18px;text-align:center;flex:none}
+.f-bull .f-icon{color:var(--up)} .f-bear .f-icon{color:var(--down)} .f-neu .f-icon{color:var(--dim)}
+.f-name{font-size:13px;font-weight:600}
+.f-score{color:var(--dim);font-weight:400;margin-left:6px}
+.f-desc{color:var(--dim);font-size:12px;margin-top:2px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td{padding:8px 10px;border-bottom:1px solid var(--line)}
+td:last-child{text-align:right;font-weight:600}
+tr:last-child td{border-bottom:none}
+.news-item{padding:12px 0;border-bottom:1px solid var(--line)}
+.news-item:last-child{border-bottom:none}
+.n-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.n-tag{font-size:11px;padding:1px 8px;border-radius:4px;font-weight:600}
+.tag-up{background:rgba(240,72,62,.15);color:var(--up)} .tag-down{background:rgba(46,189,133,.15);color:var(--down)} .tag-neu{background:rgba(138,147,178,.15);color:var(--dim)}
+.n-kind{font-size:11px;color:var(--dim);border:1px solid var(--line);padding:1px 6px;border-radius:4px}
+.n-time{font-size:11px;color:var(--dim);margin-left:auto}
+.n-title{font-size:14px;font-weight:600}
+.n-sum{font-size:12px;color:var(--dim);margin-top:4px}
+.n-link{font-size:12px;color:var(--blue);text-decoration:none;margin-top:6px;display:inline-block}
+.empty{color:var(--dim);font-size:13px;text-align:center;padding:20px}
+.lvgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lv-item{display:flex;justify-content:space-between;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel2)}
+.lv-s{border-left:3px solid var(--down)} .lv-r{border-left:3px solid var(--up)}
+.lv-price{font-weight:700;font-size:15px}
+.lv-why{color:var(--dim);font-size:12px;align-self:center}
+.calc{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.calc input{background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:10px 12px;font-size:15px;width:160px;outline:none}
+.calc input:focus{border-color:var(--blue)}
+.calc button{background:var(--blue);border:none;color:#fff;border-radius:8px;padding:10px 22px;font-size:15px;font-weight:600;cursor:pointer}
+.calc button:hover{filter:brightness(1.15)}
+.calc-res{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.calc-res .card .v.big{font-size:22px}
+.pos-advice{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--dim);margin-top:12px}
+.pos-advice b{color:var(--txt)}
+.disc{color:var(--dim);font-size:12px;margin-top:24px;padding-top:14px;border-top:1px solid var(--line)}
+.senti-head{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.senti-score{font-size:30px;font-weight:700}
+.senti-label{font-size:14px;padding:3px 12px;border-radius:6px}
+</style>
+</head>
+<body><div class="wrap">
+  <div class="head">
+    <div>
+      <h1>贵州茅台 <span style="color:var(--dim);font-size:20px">600519</span></h1>
+      <div class="sub">沪A · 数据时间 2026/8/28 10:27:06 · 共 60 个交易日</div>
+    </div>
+    <div class="price-big">
+      <span>1293.98</span>
+      <span class="pct up">+0.13%</span>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="k">今开</div><div class="v">1289.00</div></div>
+    <div class="card"><div class="k">最高 / 最低</div><div class="v">1294.97 / 1288.00</div></div>
+    <div class="card"><div class="k">昨收</div><div class="v">1292.30</div></div>
+    <div class="card"><div class="k">涨跌额</div><div class="v up">+1.68</div></div>
+    <div class="card"><div class="k">成交量</div><div class="v">0.59 万手</div></div>
+    <div class="card"><div class="k">成交额</div><div class="v">7.68 亿</div></div>
+    <div class="card"><div class="k">换手率</div><div class="v">0.05%</div></div>
+    <div class="card"><div class="k">振幅</div><div class="v">0.54%</div></div>
+  </div>
+
+  <div class="panel"><h2>K 线走势（前复权 · 红涨绿跌 · B/S 为 MACD 金叉/死叉）</h2>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 560" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,Hiragino Sans GB,Microsoft YaHei,sans-serif"><rect width="940" height="560" fill="#0f1424"/><line x1="64" y1="14.0" x2="924" y2="14.0" stroke="#2a3350" stroke-width="0.6"/><line x1="64" y1="88.4" x2="924" y2="88.4" stroke="#2a3350" stroke-width="0.6"/><line x1="64" y1="162.8" x2="924" y2="162.8" stroke="#2a3350" stroke-width="0.6"/><line x1="64" y1="237.2" x2="924" y2="237.2" stroke="#2a3350" stroke-width="0.6"/><line x1="64" y1="311.6" x2="924" y2="311.6" stroke="#2a3350" stroke-width="0.6"/><line x1="64" y1="386.0" x2="924" y2="386.0" stroke="#2a3350" stroke-width="0.6"/><line x1="64" y1="400.0" x2="924" y2="400.0" stroke="#2a3350" stroke-width="0.6"/><line x1="64" y1="448.0" x2="924" y2="448.0" stroke="#2a3350" stroke-width="0.6"/><line x1="64" y1="496.0" x2="924" y2="496.0" stroke="#2a3350" stroke-width="0.6"/><text x="56" y="18" text-anchor="end" font-size="11" fill="#8a93b2">1371.84</text><text x="56" y="92.4" text-anchor="end" font-size="11" fill="#8a93b2">1325.98</text><text x="56" y="166.8" text-anchor="end" font-size="11" fill="#8a93b2">1280.11</text><text x="56" y="241.2" text-anchor="end" font-size="11" fill="#8a93b2">1234.25</text><text x="56" y="315.6" text-anchor="end" font-size="11" fill="#8a93b2">1188.38</text><text x="56" y="390" text-anchor="end" font-size="11" fill="#8a93b2">1142.52</text><text x="71.3" y="552" text-anchor="middle" font-size="11" fill="#8a93b2">06-05</text><text x="289.9" y="552" text-anchor="middle" font-size="11" fill="#8a93b2">06-29</text><text x="508.6" y="552" text-anchor="middle" font-size="11" fill="#8a93b2">07-20</text><text x="727.2" y="552" text-anchor="middle" font-size="11" fill="#8a93b2">08-10</text><text x="931.3" y="552" text-anchor="middle" font-size="11" fill="#8a93b2">08-28</text><line x1="71.3" y1="203.6" x2="71.3" y2="228.3" stroke="#2ebd85" stroke-width="1"/><rect x="66.8" y="211.7" width="9.0" height="8.3" fill="#2ebd85"/><rect x="66.8" y="467.7" width="9.0" height="28.3" fill="#2ebd85" opacity="0.55"/><line x1="85.9" y1="211.7" x2="85.9" y2="240.9" stroke="#2ebd85" stroke-width="1"/><rect x="81.4" y="221.4" width="9.0" height="14.6" fill="#2ebd85"/><rect x="81.4" y="468.1" width="9.0" height="27.9" fill="#2ebd85" opacity="0.55"/><line x1="100.4" y1="236.0" x2="100.4" y2="253.0" stroke="#2ebd85" stroke-width="1"/><rect x="95.9" y="236.0" width="9.0" height="11.4" fill="#2ebd85"/><rect x="95.9" y="470.8" width="9.0" height="25.2" fill="#2ebd85" opacity="0.55"/><line x1="115.0" y1="205.2" x2="115.0" y2="256.8" stroke="#f0483e" stroke-width="1"/><rect x="110.5" y="215.1" width="9.0" height="38.6" fill="#f0483e"/><rect x="110.5" y="460.5" width="9.0" height="35.5" fill="#f0483e" opacity="0.55"/><line x1="129.6" y1="203.8" x2="129.6" y2="229.7" stroke="#f0483e" stroke-width="1"/><rect x="125.1" y="210.1" width="9.0" height="11.1" fill="#f0483e"/><rect x="125.1" y="473.1" width="9.0" height="22.9" fill="#f0483e" opacity="0.55"/><line x1="144.2" y1="184.1" x2="144.2" y2="232.8" stroke="#f0483e" stroke-width="1"/><rect x="139.7" y="189.1" width="9.0" height="33.6" fill="#f0483e"/><rect x="139.7" y="450.3" width="9.0" height="45.7" fill="#f0483e" opacity="0.55"/><line x1="158.7" y1="187.8" x2="158.7" y2="224.5" stroke="#2ebd85" stroke-width="1"/><rect x="154.2" y="187.8" width="9.0" height="35.1" fill="#2ebd85"/><rect x="154.2" y="458.4" width="9.0" height="37.6" fill="#2ebd85" opacity="0.55"/><line x1="173.3" y1="228.1" x2="173.3" y2="249.0" stroke="#2ebd85" stroke-width="1"/><rect x="168.8" y="229.5" width="9.0" height="18.4" fill="#2ebd85"/><rect x="168.8" y="464.4" width="9.0" height="31.6" fill="#2ebd85" opacity="0.55"/><line x1="187.9" y1="241.3" x2="187.9" y2="275.7" stroke="#2ebd85" stroke-width="1"/><rect x="183.4" y="244.1" width="9.0" height="29.2" fill="#2ebd85"/><rect x="183.4" y="455.5" width="9.0" height="40.5" fill="#2ebd85" opacity="0.55"/><line x1="202.5" y1="275.2" x2="202.5" y2="320.0" stroke="#2ebd85" stroke-width="1"/><rect x="198.0" y="281.4" width="9.0" height="32.5" fill="#2ebd85"/><rect x="198.0" y="444.0" width="9.0" height="52.0" fill="#2ebd85" opacity="0.55"/><line x1="217.1" y1="252.6" x2="217.1" y2="330.1" stroke="#f0483e" stroke-width="1"/><rect x="212.6" y="271.0" width="9.0" height="44.0" fill="#f0483e"/><rect x="212.6" y="443.3" width="9.0" height="52.7" fill="#f0483e" opacity="0.55"/><line x1="231.6" y1="234.4" x2="231.6" y2="310.6" stroke="#2ebd85" stroke-width="1"/><rect x="227.1" y="274.9" width="9.0" height="26.9" fill="#2ebd85"/><rect x="227.1" y="443.5" width="9.0" height="52.5" fill="#2ebd85" opacity="0.55"/><line x1="246.2" y1="270.3" x2="246.2" y2="326.0" stroke="#2ebd85" stroke-width="1"/><rect x="241.7" y="301.5" width="9.0" height="24.2" fill="#2ebd85"/><rect x="241.7" y="455.0" width="9.0" height="41.0" fill="#2ebd85" opacity="0.55"/><line x1="260.8" y1="294.4" x2="260.8" y2="338.2" stroke="#f0483e" stroke-width="1"/><rect x="256.3" y="318.6" width="9.0" height="8.3" fill="#f0483e"/><rect x="256.3" y="452.2" width="9.0" height="43.8" fill="#f0483e" opacity="0.55"/><line x1="275.4" y1="294.4" x2="275.4" y2="344.5" stroke="#2ebd85" stroke-width="1"/><rect x="270.9" y="294.4" width="9.0" height="49.2" fill="#2ebd85"/><rect x="270.9" y="450.7" width="9.0" height="45.3" fill="#2ebd85" opacity="0.55"/><line x1="289.9" y1="268.4" x2="289.9" y2="372.2" stroke="#f0483e" stroke-width="1"/><rect x="285.4" y="300.9" width="9.0" height="42.1" fill="#f0483e"/><rect x="285.4" y="435.5" width="9.0" height="60.5" fill="#f0483e" opacity="0.55"/><line x1="304.5" y1="299.8" x2="304.5" y2="331.7" stroke="#2ebd85" stroke-width="1"/><rect x="300.0" y="313.8" width="9.0" height="2.5" fill="#2ebd85"/><rect x="300.0" y="460.2" width="9.0" height="35.8" fill="#2ebd85" opacity="0.55"/><line x1="319.1" y1="297.9" x2="319.1" y2="347.4" stroke="#f0483e" stroke-width="1"/><rect x="314.6" y="304.1" width="9.0" height="20.9" fill="#f0483e"/><rect x="314.6" y="457.6" width="9.0" height="38.4" fill="#f0483e" opacity="0.55"/><line x1="333.7" y1="267.6" x2="333.7" y2="308.1" stroke="#f0483e" stroke-width="1"/><rect x="329.2" y="287.9" width="9.0" height="16.2" fill="#f0483e"/><rect x="329.2" y="450.0" width="9.0" height="46.0" fill="#f0483e" opacity="0.55"/><line x1="348.2" y1="276.3" x2="348.2" y2="317.1" stroke="#2ebd85" stroke-width="1"/><rect x="343.7" y="284.3" width="9.0" height="17.5" fill="#2ebd85"/><rect x="343.7" y="465.0" width="9.0" height="31.0" fill="#2ebd85" opacity="0.55"/><line x1="362.8" y1="268.4" x2="362.8" y2="325.2" stroke="#f0483e" stroke-width="1"/><rect x="358.3" y="281.5" width="9.0" height="34.0" fill="#f0483e"/><rect x="358.3" y="458.9" width="9.0" height="37.1" fill="#f0483e" opacity="0.55"/><line x1="377.4" y1="289.5" x2="377.4" y2="312.0" stroke="#2ebd85" stroke-width="1"/><rect x="372.9" y="292.8" width="9.0" height="18.1" fill="#2ebd85"/><rect x="372.9" y="471.3" width="9.0" height="24.7" fill="#2ebd85" opacity="0.55"/><line x1="392.0" y1="291.2" x2="392.0" y2="330.1" stroke="#f0483e" stroke-width="1"/><rect x="387.5" y="293.9" width="9.0" height="17.1" fill="#f0483e"/><rect x="387.5" y="472.7" width="9.0" height="23.3" fill="#f0483e" opacity="0.55"/><line x1="406.5" y1="305.7" x2="406.5" y2="328.4" stroke="#2ebd85" stroke-width="1"/><rect x="402.0" y="307.4" width="9.0" height="14.2" fill="#2ebd85"/><rect x="402.0" y="465.2" width="9.0" height="30.8" fill="#2ebd85" opacity="0.55"/><line x1="421.1" y1="284.7" x2="421.1" y2="341.0" stroke="#f0483e" stroke-width="1"/><rect x="416.6" y="284.7" width="9.0" height="36.9" fill="#f0483e"/><rect x="416.6" y="448.8" width="9.0" height="47.2" fill="#f0483e" opacity="0.55"/><line x1="435.7" y1="268.4" x2="435.7" y2="308.7" stroke="#f0483e" stroke-width="1"/><rect x="431.2" y="274.9" width="9.0" height="22.5" fill="#f0483e"/><rect x="431.2" y="458.0" width="9.0" height="38.0" fill="#f0483e" opacity="0.55"/><line x1="450.3" y1="249.2" x2="450.3" y2="284.6" stroke="#f0483e" stroke-width="1"/><rect x="445.8" y="268.6" width="9.0" height="9.6" fill="#f0483e"/><rect x="445.8" y="456.6" width="9.0" height="39.4" fill="#f0483e" opacity="0.55"/><line x1="464.8" y1="200.9" x2="464.8" y2="294.9" stroke="#f0483e" stroke-width="1"/><rect x="460.3" y="209.9" width="9.0" height="76.9" fill="#f0483e"/><rect x="460.3" y="430.9" width="9.0" height="65.1" fill="#f0483e" opacity="0.55"/><line x1="479.4" y1="182.5" x2="479.4" y2="219.7" stroke="#f0483e" stroke-width="1"/><rect x="474.9" y="197.1" width="9.0" height="11.3" fill="#f0483e"/><rect x="474.9" y="452.9" width="9.0" height="43.1" fill="#f0483e" opacity="0.55"/><line x1="494.0" y1="180.3" x2="494.0" y2="229.5" stroke="#2ebd85" stroke-width="1"/><rect x="489.5" y="180.8" width="9.0" height="26.0" fill="#2ebd85"/><rect x="489.5" y="443.2" width="9.0" height="52.8" fill="#2ebd85" opacity="0.55"/><line x1="508.6" y1="83.5" x2="508.6" y2="185.7" stroke="#f0483e" stroke-width="1"/><rect x="504.1" y="85.9" width="9.0" height="93.3" fill="#f0483e"/><rect x="504.1" y="400.0" width="9.0" height="96.0" fill="#f0483e" opacity="0.55"/><line x1="523.2" y1="58.0" x2="523.2" y2="135.6" stroke="#2ebd85" stroke-width="1"/><rect x="518.7" y="67.3" width="9.0" height="50.3" fill="#2ebd85"/><rect x="518.7" y="426.2" width="9.0" height="69.8" fill="#2ebd85" opacity="0.55"/><line x1="537.7" y1="117.6" x2="537.7" y2="157.7" stroke="#f0483e" stroke-width="1"/><rect x="533.2" y="122.4" width="9.0" height="8.1" fill="#f0483e"/><rect x="533.2" y="437.1" width="9.0" height="58.9" fill="#f0483e" opacity="0.55"/><line x1="552.3" y1="125.7" x2="552.3" y2="154.2" stroke="#2ebd85" stroke-width="1"/><rect x="547.8" y="130.9" width="9.0" height="12.6" fill="#2ebd85"/><rect x="547.8" y="465.3" width="9.0" height="30.7" fill="#2ebd85" opacity="0.55"/><line x1="566.9" y1="115.6" x2="566.9" y2="152.9" stroke="#2ebd85" stroke-width="1"/><rect x="562.4" y="122.4" width="9.0" height="12.3" fill="#2ebd85"/><rect x="562.4" y="463.7" width="9.0" height="32.3" fill="#2ebd85" opacity="0.55"/><line x1="581.5" y1="117.6" x2="581.5" y2="163.7" stroke="#2ebd85" stroke-width="1"/><rect x="577.0" y="117.6" width="9.0" height="30.0" fill="#2ebd85"/><rect x="577.0" y="467.1" width="9.0" height="28.9" fill="#2ebd85" opacity="0.55"/><line x1="596.0" y1="98.1" x2="596.0" y2="147.5" stroke="#f0483e" stroke-width="1"/><rect x="591.5" y="98.1" width="9.0" height="34.1" fill="#f0483e"/><rect x="591.5" y="447.9" width="9.0" height="48.1" fill="#f0483e" opacity="0.55"/><line x1="610.6" y1="60.0" x2="610.6" y2="111.0" stroke="#2ebd85" stroke-width="1"/><rect x="606.1" y="75.7" width="9.0" height="20.8" fill="#2ebd85"/><rect x="606.1" y="439.6" width="9.0" height="56.4" fill="#2ebd85" opacity="0.55"/><line x1="625.2" y1="30.0" x2="625.2" y2="94.9" stroke="#f0483e" stroke-width="1"/><rect x="620.7" y="30.4" width="9.0" height="62.8" fill="#f0483e"/><rect x="620.7" y="431.0" width="9.0" height="65.0" fill="#f0483e" opacity="0.55"/><line x1="639.8" y1="40.2" x2="639.8" y2="88.7" stroke="#f0483e" stroke-width="1"/><rect x="635.3" y="48.5" width="9.0" height="33.3" fill="#f0483e"/><rect x="635.3" y="446.1" width="9.0" height="49.9" fill="#f0483e" opacity="0.55"/><line x1="654.3" y1="27.8" x2="654.3" y2="55.9" stroke="#f0483e" stroke-width="1"/><rect x="649.8" y="34.9" width="9.0" height="13.6" fill="#f0483e"/><rect x="649.8" y="463.3" width="9.0" height="32.7" fill="#f0483e" opacity="0.55"/><line x1="668.9" y1="47.9" x2="668.9" y2="84.5" stroke="#2ebd85" stroke-width="1"/><rect x="664.4" y="49.3" width="9.0" height="35.2" fill="#2ebd85"/><rect x="664.4" y="462.1" width="9.0" height="33.9" fill="#2ebd85" opacity="0.55"/><line x1="683.5" y1="75.7" x2="683.5" y2="124.9" stroke="#2ebd85" stroke-width="1"/><rect x="679.0" y="84.5" width="9.0" height="35.6" fill="#2ebd85"/><rect x="679.0" y="457.4" width="9.0" height="38.6" fill="#2ebd85" opacity="0.55"/><line x1="698.1" y1="107.2" x2="698.1" y2="130.5" stroke="#2ebd85" stroke-width="1"/><rect x="693.6" y="114.3" width="9.0" height="2.4" fill="#2ebd85"/><rect x="693.6" y="473.0" width="9.0" height="23.0" fill="#2ebd85" opacity="0.55"/><line x1="712.6" y1="105.8" x2="712.6" y2="128.9" stroke="#f0483e" stroke-width="1"/><rect x="708.1" y="115.6" width="9.0" height="1.0" fill="#f0483e"/><rect x="708.1" y="473.4" width="9.0" height="22.6" fill="#f0483e" opacity="0.55"/><line x1="727.2" y1="33.3" x2="727.2" y2="101.2" stroke="#f0483e" stroke-width="1"/><rect x="722.7" y="51.3" width="9.0" height="38.7" fill="#f0483e"/><rect x="722.7" y="439.3" width="9.0" height="56.7" fill="#f0483e" opacity="0.55"/><line x1="741.8" y1="45.1" x2="741.8" y2="68.9" stroke="#2ebd85" stroke-width="1"/><rect x="737.3" y="52.7" width="9.0" height="2.4" fill="#2ebd85"/><rect x="737.3" y="471.5" width="9.0" height="24.5" fill="#2ebd85" opacity="0.55"/><line x1="756.4" y1="38.3" x2="756.4" y2="77.8" stroke="#2ebd85" stroke-width="1"/><rect x="751.9" y="55.1" width="9.0" height="5.7" fill="#2ebd85"/><rect x="751.9" y="464.3" width="9.0" height="31.7" fill="#2ebd85" opacity="0.55"/><line x1="770.9" y1="33.9" x2="770.9" y2="70.5" stroke="#f0483e" stroke-width="1"/><rect x="766.4" y="40.9" width="9.0" height="28.0" fill="#f0483e"/><rect x="766.4" y="466.7" width="9.0" height="29.3" fill="#f0483e" opacity="0.55"/><line x1="785.5" y1="34.8" x2="785.5" y2="68.7" stroke="#2ebd85" stroke-width="1"/><rect x="781.0" y="41.3" width="9.0" height="21.1" fill="#2ebd85"/><rect x="781.0" y="469.0" width="9.0" height="27.0" fill="#2ebd85" opacity="0.55"/><line x1="800.1" y1="128.9" x2="800.1" y2="162.4" stroke="#2ebd85" stroke-width="1"/><rect x="795.6" y="138.7" width="9.0" height="3.0" fill="#2ebd85"/><rect x="795.6" y="425.1" width="9.0" height="70.9" fill="#2ebd85" opacity="0.55"/><line x1="814.7" y1="125.8" x2="814.7" y2="154.6" stroke="#f0483e" stroke-width="1"/><rect x="810.2" y="133.8" width="9.0" height="11.3" fill="#f0483e"/><rect x="810.2" y="461.0" width="9.0" height="35.0" fill="#f0483e" opacity="0.55"/><line x1="829.3" y1="116.1" x2="829.3" y2="146.0" stroke="#f0483e" stroke-width="1"/><rect x="824.8" y="117.8" width="9.0" height="12.7" fill="#f0483e"/><rect x="824.8" y="462.0" width="9.0" height="34.0" fill="#f0483e" opacity="0.55"/><line x1="843.8" y1="119.4" x2="843.8" y2="145.1" stroke="#2ebd85" stroke-width="1"/><rect x="839.3" y="130.9" width="9.0" height="13.4" fill="#2ebd85"/><rect x="839.3" y="473.1" width="9.0" height="22.9" fill="#2ebd85" opacity="0.55"/><line x1="858.4" y1="144.3" x2="858.4" y2="175.9" stroke="#2ebd85" stroke-width="1"/><rect x="853.9" y="144.3" width="9.0" height="30.3" fill="#2ebd85"/><rect x="853.9" y="465.7" width="9.0" height="30.3" fill="#2ebd85" opacity="0.55"/><line x1="873.0" y1="108.2" x2="873.0" y2="178.7" stroke="#f0483e" stroke-width="1"/><rect x="868.5" y="123.0" width="9.0" height="54.6" fill="#f0483e"/><rect x="868.5" y="452.2" width="9.0" height="43.8" fill="#f0483e" opacity="0.55"/><line x1="887.6" y1="103.0" x2="887.6" y2="128.7" stroke="#2ebd85" stroke-width="1"/><rect x="883.1" y="111.3" width="9.0" height="12.8" fill="#2ebd85"/><rect x="883.1" y="476.9" width="9.0" height="19.1" fill="#2ebd85" opacity="0.55"/><line x1="902.1" y1="107.1" x2="902.1" y2="138.7" stroke="#f0483e" stroke-width="1"/><rect x="897.6" y="126.0" width="9.0" height="4.5" fill="#f0483e"/><rect x="897.6" y="476.3" width="9.0" height="19.7" fill="#f0483e" opacity="0.55"/><line x1="916.7" y1="122.4" x2="916.7" y2="150.0" stroke="#2ebd85" stroke-width="1"/><rect x="912.2" y="124.1" width="9.0" height="18.9" fill="#2ebd85"/><rect x="912.2" y="473.6" width="9.0" height="22.4" fill="#2ebd85" opacity="0.55"/><line x1="931.3" y1="138.7" x2="931.3" y2="150.0" stroke="#f0483e" stroke-width="1"/><rect x="926.8" y="140.3" width="9.0" height="8.1" fill="#f0483e"/><rect x="926.8" y="490.6" width="9.0" height="5.4" fill="#f0483e" opacity="0.55"/><polyline fill="none" stroke="#f5b942" stroke-width="1.4" points="129.6,225.7 144.2,219.5 158.7,216.9 173.3,217.0 187.9,228.7 202.5,249.4 217.1,265.8 231.6,281.6 246.2,297.2 260.8,306.2 275.4,312.2 289.9,318.1 304.5,321.0 319.1,316.7 333.7,310.6 348.2,302.2 362.8,298.3 377.4,297.2 392.0,295.2 406.5,302.0 421.1,298.5 435.7,297.2 450.3,288.8 464.8,272.0 479.4,247.0 494.0,231.5 508.6,193.7 523.2,163.5 537.7,146.0 552.3,135.2 566.9,120.8 581.5,133.2 596.0,129.3 610.6,124.1 625.2,101.4 639.8,84.2 654.3,61.7 668.9,58.9 683.5,63.7 698.1,80.9 712.6,94.3 727.2,97.6 741.8,91.7 756.4,79.9 770.9,64.7 785.5,54.1 800.1,72.2 814.7,87.9 829.3,99.3 843.8,120.0 858.4,142.4 873.0,138.7 887.6,136.7 902.1,138.4 916.7,138.1 931.3,131.3"/><polyline fill="none" stroke="#3b82f6" stroke-width="1.4" points="202.5,237.6 217.1,242.7 231.6,249.2 246.2,257.1 260.8,267.4 275.4,280.8 289.9,292.0 304.5,301.3 319.1,306.9 333.7,308.4 348.2,307.2 362.8,308.2 377.4,309.1 392.0,306.0 406.5,306.3 421.1,300.4 435.7,297.8 450.3,293.0 464.8,283.6 479.4,274.5 494.0,265.0 508.6,245.4 523.2,226.1 537.7,209.0 552.3,191.1 566.9,176.1 581.5,163.4 596.0,146.4 610.6,135.0 625.2,118.3 639.8,102.5 654.3,97.4 668.9,94.1 683.5,93.9 698.1,91.2 712.6,89.3 727.2,79.6 741.8,75.3 756.4,71.8 770.9,72.8 785.5,74.2 800.1,84.9 814.7,89.8 829.3,89.6 843.8,92.4 858.4,98.3 873.0,105.4 887.6,112.3 902.1,118.9 916.7,129.1 931.3,136.9"/><polyline fill="none" stroke="#a855f7" stroke-width="1.4" points="348.2,272.4 362.8,275.4 377.4,279.2 392.0,281.5 406.5,286.8 421.1,290.6 435.7,294.9 450.3,297.2 464.8,295.3 479.4,291.4 494.0,286.1 508.6,276.8 523.2,267.6 537.7,257.5 552.3,248.7 566.9,238.3 581.5,230.6 596.0,219.7 610.6,209.3 625.2,196.4 639.8,183.8 654.3,171.4 668.9,160.1 683.5,151.4 698.1,141.2 712.6,132.7 727.2,121.5 741.8,110.9 756.4,103.4 770.9,95.6 785.5,88.4 800.1,91.2 814.7,92.0 829.3,91.7 843.8,91.8 858.4,93.8 873.0,92.5 887.6,93.8 902.1,95.3 916.7,100.9 931.3,105.5"/><line x1="64" y1="185.1" x2="924" y2="185.1" stroke="#2ebd85" stroke-width="1" stroke-dasharray="5 4" opacity="0.75"/><text x="920" y="181.1" text-anchor="end" font-size="10" fill="#2ebd85">支 1266.39</text><line x1="64" y1="159.3" x2="924" y2="159.3" stroke="#2ebd85" stroke-width="1" stroke-dasharray="5 4" opacity="0.75"/><text x="920" y="155.3" text-anchor="end" font-size="10" fill="#2ebd85">支 1282.24</text><line x1="64" y1="105.5" x2="924" y2="105.5" stroke="#2ebd85" stroke-width="1" stroke-dasharray="5 4" opacity="0.75"/><text x="920" y="101.5" text-anchor="end" font-size="10" fill="#2ebd85">支 1315.41</text><line x1="64" y1="105.5" x2="924" y2="105.5" stroke="#f0483e" stroke-width="1" stroke-dasharray="5 4" opacity="0.75"/><text x="920" y="101.5" text-anchor="end" font-size="10" fill="#f0483e">压 1315.41</text><line x1="64" y1="27.8" x2="924" y2="27.8" stroke="#f0483e" stroke-width="1" stroke-dasharray="5 4" opacity="0.75"/><text x="920" y="23.8" text-anchor="end" font-size="10" fill="#f0483e">压 1363.35</text><line x1="64" y1="26.0" x2="924" y2="26.0" stroke="#f0483e" stroke-width="1" stroke-dasharray="5 4" opacity="0.75"/><text x="920" y="22" text-anchor="end" font-size="10" fill="#f0483e">压 1364.43</text><rect x="64" y="400" width="860" height="96" fill="none" stroke="#232c47" stroke-width="0.6"/><rect x="64" y="14" width="860" height="372" fill="none" stroke="#232c47" stroke-width="0.6"/><g font-size="11"><text x="70" y="30" fill="#f5b942">MA5</text><text x="108" y="30" fill="#3b82f6">MA10</text><text x="154" y="30" fill="#a855f7">MA20</text><text x="200" y="30" fill="#f97316">MA60</text></g></svg>
+  </div>
+
+  <div class="vgrid">
+    <div class="panel">
+      <h2>买卖时机信号</h2>
+      <div class="verdict">
+        <span class="vbadge neutral">观望</span>
+        <div style="flex:1">
+          <div class="scorebar"><div class="pin" style="left:52.0%"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:6px"><span>偏空 -100</span><span>信号分 4</span><span>偏多 +100</span></div>
+        </div>
+      </div>
+      <div class="vsum">综合信号分 4/100（观望）。多头因子 1 个，空头因子 2 个。多空交织，建议观望等待方向明确。</div>
+      <div style="margin:14px 0;border-top:1px solid var(--line)"></div>
+      <div class="factors"><div class="factor f-neu"><span class="f-icon">◆</span><div><div class="f-name">均线排列 <span class="f-score">0</span></div><div class="f-desc">均线缠绕，方向不明</div></div></div><div class="factor f-bear"><span class="f-icon">▼</span><div><div class="f-name">中期趋势 <span class="f-score">-1</span></div><div class="f-desc">股价位于 MA20 下方、MA60 上方</div></div></div><div class="factor f-bear"><span class="f-icon">▼</span><div><div class="f-name">MACD <span class="f-score">-1</span></div><div class="f-desc">DIF 在 DEA 下方，空头占优</div></div></div><div class="factor f-neu"><span class="f-icon">◆</span><div><div class="f-name">RSI <span class="f-score">0</span></div><div class="f-desc">RSI14=47.99 中性区域</div></div></div><div class="factor f-bull"><span class="f-icon">▲</span><div><div class="f-name">KDJ <span class="f-score">+1.5</span></div><div class="f-desc">KDJ 金叉向上</div></div></div><div class="factor f-neu"><span class="f-icon">◆</span><div><div class="f-name">量能 <span class="f-score">0</span></div><div class="f-desc">量能平稳</div></div></div><div class="factor f-neu"><span class="f-icon">◆</span><div><div class="f-name">布林带 <span class="f-score">0</span></div><div class="f-desc">位于布林通道中部</div></div></div></div>
+    </div>
+
+    <div>
+      <div class="panel"><h2>技术指标</h2>
+        <table><tr><td>MA5 / MA10</td><td>1299.55 / 1296.10</td></tr><tr><td>MA20 / MA60</td><td>1315.41 / 1265.06</td></tr><tr><td>MACD (DIF/DEA/柱)</td><td>1.80 / 7.89 / -12.17</td></tr><tr><td>RSI6 / RSI14</td><td>42.5 / 48.0</td></tr><tr><td>KDJ (K/D/J)</td><td>41.8 / 36.6 / 52.2</td></tr><tr><td>BOLL 上/中/下</td><td>1364.43 / 1315.41 / 1266.39</td></tr><tr><td>5日均量 / 10日均量</td><td>24399 / 33550</td></tr></table>
+      </div>
+      <div class="panel"><h2>支撑 / 压力位</h2>
+        <div class="lvgrid">
+          <div><div style="color:var(--down);font-size:12px;margin-bottom:8px;font-weight:600">▼ 支撑位</div><div class="lv-item lv-s"><span class="lv-price">1266.39</span><span class="lv-why">布林下轨</span></div><div class="lv-item lv-s"><span class="lv-price">1282.24</span><span class="lv-why">斐波那契 38.2%</span></div><div class="lv-item lv-s"><span class="lv-price">1315.41</span><span class="lv-why">MA20</span></div></div>
+          <div><div style="color:var(--up);font-size:12px;margin-bottom:8px;font-weight:600">▲ 压力位</div><div class="lv-item lv-r"><span class="lv-price">1315.41</span><span class="lv-why">MA20</span></div><div class="lv-item lv-r"><span class="lv-price">1363.35</span><span class="lv-why">60日高点</span></div><div class="lv-item lv-r"><span class="lv-price">1364.43</span><span class="lv-why">布林上轨</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="vgrid">
+    <div class="panel">
+      <h2>市场情绪</h2>
+      <div class="senti-head">
+        <span class="senti-score up">+0.12</span>
+        <span class="senti-label tag-neu">中性</span>
+        <span style="color:var(--dim);font-size:12px">范围 -1.0 ~ +1.0（新闻 + 当日走势）</span>
+      </div>
+      <div class="vsum">新闻情绪分 0.12/1.0（中性）。相关新闻 6 条，大盘快讯 0 条。当日涨跌 0.13%。</div>
+      <div style="margin:14px 0;border-top:1px solid var(--line)"></div>
+      <div class="news-item"><div class="n-head"><span class="n-tag tag-neu">中性</span><span class="n-kind">相关</span><span class="n-time">2026-08-28 07:46:37</span></div><div class="n-title">贵州茅台(600519)2026年中报点评：茅台酒业务保持稳健 市场化程度持续提升</div><div class="n-sum">贵州茅台(600519)2026年中报点评：茅台酒业务保持稳健 市场化程度持续提升</div><a class="n-link" href="http://gu.qq.com/resources/shy/news/detail-v2/index.html#/?id=res841200597167&amp;s=b" target="_blank" rel="noopener">原文 ↗</a></div><div class="news-item"><div class="n-head"><span class="n-tag tag-neu">中性</span><span class="n-kind">相关</span><span class="n-time">2026-08-25 15:35:49</span></div><div class="n-title">贵州茅台(600519)：市场化改革顺利推进 坚定茅台底部区间配置价值</div><div class="n-sum">贵州茅台(600519)：市场化改革顺利推进 坚定茅台底部区间配置价值</div><a class="n-link" href="http://gu.qq.com/resources/shy/news/detail-v2/index.html#/?id=res840986583189&amp;s=b" target="_blank" rel="noopener">原文 ↗</a></div><div class="news-item"><div class="n-head"><span class="n-tag tag-neu">中性</span><span class="n-kind">相关</span><span class="n-time">2026-08-23 20:51:26</span></div><div class="n-title">贵州茅台(600519)：以市场化破酒业时代之变局</div><div class="n-sum">贵州茅台(600519)：以市场化破酒业时代之变局</div><a class="n-link" href="http://gu.qq.com/resources/shy/news/detail-v2/index.html#/?id=res840826755385&amp;s=b" target="_blank" rel="noopener">原文 ↗</a></div><div class="news-item"><div class="n-head"><span class="n-tag tag-neu">中性</span><span class="n-kind">相关</span><span class="n-time">2026-08-28 09:06:37</span></div><div class="n-title">贵州茅台(600519)：拨雾见新局 奋楫千帆扬</div><div class="n-sum">贵州茅台(600519)：拨雾见新局 奋楫千帆扬</div><a class="n-link" href="http://gu.qq.com/resources/shy/news/detail-v2/index.html#/?id=res841219914633&amp;s=b" target="_blank" rel="noopener">原文 ↗</a></div><div class="news-item"><div class="n-head"><span class="n-tag tag-neu">中性</span><span class="n-kind">相关</span><span class="n-time">2026-08-21 10:00:43</span></div><div class="n-title">贵州茅台(600519)：市场化改革带来短期业绩阵痛 公司改革成效显著 基本面仍具韧性</div><div class="n-sum">贵州茅台(600519)：市场化改革带来短期业绩阵痛 公司改革成效显著 基本面仍具韧性</div><a class="n-link" href="http://gu.qq.com/resources/shy/news/detail-v2/index.html#/?id=res840618256458&amp;s=b" target="_blank" rel="noopener">原文 ↗</a></div><div class="news-item"><div class="n-head"><span class="n-tag tag-neu">中性</span><span class="n-kind">相关</span><span class="n-time">2026-08-19 19:40:47</span></div><div class="n-title">贵州茅台(600519)2026年中期业绩点评报告：提价与直销双轮驱动 改革深化稳基本盘</div><div class="n-sum">贵州茅台(600519)2026年中期业绩点评报告：提价与直销双轮驱动 改革深化稳基本盘</div><a class="n-link" href="http://gu.qq.com/resources/shy/news/detail-v2/index.html#/?id=res840475429205&amp;s=b" target="_blank" rel="noopener">原文 ↗</a></div><div class="news-item"><div class="n-head"><span class="n-tag tag-neu">中性</span><span class="n-kind">大盘</span><span class="n-time">2026-08-15 00:00:00</span></div><div class="n-title">贵州茅台:贵州茅台关于召开2026年半年度业绩说明会的公告</div><div class="n-sum">贵州茅台:贵州茅台关于召开2026年半年度业绩说明会的公告</div><a class="n-link" href="https://data.eastmoney.com/notices/detail/600519/AN202608141827994407.html" target="_blank" rel="noopener">原文 ↗</a></div><div class="news-item"><div class="n-head"><span class="n-tag tag-down">利空</span><span class="n-kind">大盘</span><span class="n-time">2026-08-15 00:00:00</span></div><div class="n-title">贵州茅台:贵州茅台关于贵州茅台集团财务有限公司的风险评估报告</div><div class="n-sum">贵州茅台:贵州茅台关于贵州茅台集团财务有限公司的风险评估报告</div><a class="n-link" href="https://data.eastmoney.com/notices/detail/600519/AN202608141827994404.html" target="_blank" rel="noopener">原文 ↗</a></div><div class="news-item"><div class="n-head"><span class="n-tag tag-neu">中性</span><span class="n-kind">大盘</span><span class="n-time">2026-08-15 00:00:00</span></div><div class="n-title">贵州茅台:贵州茅台2026年半年度报告摘要</div><div class="n-sum">贵州茅台:贵州茅台2026年半年度报告摘要</div><a class="n-link" href="https://data.eastmoney.com/notices/detail/600519/AN202608141827994403.html" target="_blank" rel="noopener">原文 ↗</a></div><div class="news-item"><div class="n-head"><span class="n-tag tag-neu">中性</span><span class="n-kind">大盘</span><span class="n-time">2026-08-15 00:00:00</span></div><div class="n-title">贵州茅台:贵州茅台关于会计政策变更的公告</div><div class="n-sum">贵州茅台:贵州茅台关于会计政策变更的公告</div><a class="n-link" href="https://data.eastmoney.com/notices/detail/600519/AN202608141827994406.html" target="_blank" rel="noopener">原文 ↗</a></div><div class="news-item"><div class="n-head"><span class="n-tag tag-neu">中性</span><span class="n-kind">大盘</span><span class="n-time">2026-08-15 00:00:00</span></div><div class="n-title">贵州茅台:贵州茅台第五届董事会2026年度第三次会议决议公告</div><div class="n-sum">贵州茅台:贵州茅台第五届董事会2026年度第三次会议决议公告</div><a class="n-link" href="https://data.eastmoney.com/notices/detail/600519/AN202608141827994405.html" target="_blank" rel="noopener">原文 ↗</a></div>
+    </div>
+
+    <div class="panel">
+      <h2>持仓盈亏计算</h2>
+      <div class="calc">
+        <input id="shares" type="number" placeholder="持股数量（股）" min="0"/>
+        <input id="cost" type="number" placeholder="买入成本价（元）" min="0" step="0.01"/>
+        <button onclick="calcPos()">计算盈亏</button>
+      </div>
+      <div class="calc-res" id="calcRes">
+        <div class="card"><div class="k">当前市值</div><div class="v" id="rValue">—</div></div>
+        <div class="card"><div class="k">浮动盈亏</div><div class="v big" id="rPl">—</div></div>
+        <div class="card"><div class="k">盈亏比例</div><div class="v big" id="rPct">—</div></div>
+        <div class="card"><div class="k">参考止损位</div><div class="v" id="rStop">1266.39</div></div>
+        <div class="card"><div class="k">参考止盈位</div><div class="v" id="rTake">1364.43</div></div>
+      </div>
+      <div class="pos-advice" id="rAdvice">信号中性，持有观察，突破压力位（1364.43）或跌破支撑位（1266.39）再做决策。</div>
+      <script>
+      const _PRICE = 1293.98, _STOP = 1266.39, _TAKE = 1364.43;
+      const _SUPP = [1266.39,1282.24,1315.41];
+      const _RESI = [1315.41,1363.35,1364.43];
+      function calcPos() {
+        const sh = parseFloat(document.getElementById("shares").value) || 0;
+        const co = parseFloat(document.getElementById("cost").value) || 0;
+        const val = _PRICE * sh;
+        const pl = (_PRICE - co) * sh;
+        const pct = co ? (_PRICE - co) / co * 100 : 0;
+        const stop = (_SUPP.length ? _SUPP[0] : _PRICE * 0.93);
+        const take = (_RESI.length ? _RESI[_RESI.length - 1] : _PRICE * 1.08);
+        const upFlag = pl >= 0;
+        document.getElementById("rValue").textContent = val.toFixed(2) + " 元";
+        const plEl = document.getElementById("rPl");
+        plEl.textContent = (pl >= 0 ? "+" : "") + pl.toFixed(2) + " 元";
+        plEl.className = "v big " + (upFlag ? "up" : "down");
+        const pctEl = document.getElementById("rPct");
+        pctEl.textContent = (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%";
+        pctEl.className = "v big " + (upFlag ? "up" : "down");
+        document.getElementById("rStop").textContent = stop.toFixed(2);
+        document.getElementById("rTake").textContent = take.toFixed(2);
+        let adv = "当前价 " + _PRICE.toFixed(2) + " 元，";
+        if (sh > 0 && co > 0) {
+          adv += "持仓 " + sh + " 股 × 成本 " + co.toFixed(2) + "，浮盈 " + (pl >= 0 ? "+" : "") + pl.toFixed(2) + " 元（" + (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%）。";
+          adv += "建议：跌破支撑 " + stop.toFixed(2) + " 考虑止损，突破压力 " + take.toFixed(2) + " 考虑止盈或减仓。";
+        } else {
+          adv += "输入持仓后给出具体建议。";
+        }
+        document.getElementById("rAdvice").innerHTML = "<b>操作参考：</b>" + adv;
+      }
+      </script>
+    </div>
+  </div>
+
+  <div class="disc">⚠️ 免责声明：本报告由公开行情数据自动生成，仅供参考，不构成任何投资建议。股市有风险，入市需谨慎。</div>
+</div></body></html>
