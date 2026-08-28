@@ -291,12 +291,15 @@ export async function run(argv) {
   const stock = /^\d\.\d{6}$/.test(args.code)
     ? { code: args.code.split(".")[1], name: null, secid: args.code, market: "AStock" }
     : await resolveStock(args.code);
-  const [quote, kline, news, fundamentals, valuation] = await Promise.all([
+  // 行情+K线为核心数据（多源兜底），新闻/基本面/估值尽力而为，失败不阻断分析
+  const [quote, kline] = await Promise.all([
     fetchQuote(stock.secid),
     fetchKline(stock.secid, args.days),
-    fetchNews(stock.name || "", stock.code, stock.secid),
-    fetchFundamentals(stock.secid),
-    fetchValuation(stock.secid),
+  ]);
+  const [news, fundamentals, valuation] = await Promise.all([
+    fetchNews(stock.name || "", stock.code, stock.secid).catch(() => []),
+    fetchFundamentals(stock.secid).catch(() => []),
+    fetchValuation(stock.secid).catch(() => null),
   ]);
   stock.name = stock.name || quote.name || "";
   const result = {
