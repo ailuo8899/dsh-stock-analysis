@@ -55,7 +55,13 @@ td{padding:12px 14px;border-bottom:1px solid var(--line)}
 .search-row button{padding:12px 24px;border:none;border-radius:8px;background:var(--blue);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
 .loading{color:var(--dim);font-size:13px;padding:20px;text-align:center}
 .err{background:rgba(240,72,62,.1);border:1px solid rgba(240,72,62,.4);color:var(--up);padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px}
-.lcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:16px}
+.lcards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}
+.pager{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.pager button{padding:6px 14px;border:1px solid var(--line);background:var(--panel);color:var(--txt);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer}
+.pager button:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
+.pager button:disabled{opacity:.35;cursor:default}
+.pager .pg{color:var(--dim);font-size:12px}
+.pager .pg-now{color:var(--blue);font-weight:700}
 .lcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:border-color .15s,transform .15s}
 .lcard:hover{border-color:var(--blue);transform:translateY(-2px)}
 .lcard .lc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
@@ -130,27 +136,58 @@ function timing(res){
 
 // 点击股票 → 切到分析 tab 并自动分析
 // 龙头股票卡片（简洁分析报告）
+let lcPage=1, lcData=[]; // 龙头卡片分页状态
+const LC_PER_PAGE=16; // 每页 16 张（4×4布局，16×3=48 共3页）
+function renderLcPage(){
+  const el=document.getElementById("leadersCards");
+  if(!lcData.length){el.innerHTML='<div class="empty">龙头数据暂不可用（可能限流）</div>';return;}
+  const totalPages=Math.ceil(lcData.length/LC_PER_PAGE);
+  if(lcPage>totalPages)lcPage=totalPages;
+  if(lcPage<1)lcPage=1;
+  const start=(lcPage-1)*LC_PER_PAGE;
+  const pageCards=lcData.slice(start,start+LC_PER_PAGE);
+  const cards=pageCards.map(c=>{
+    const t=c.timing||{label:'观望',cls:'neutral'};
+    const sup=(c.supports||[]).slice(-2).join("/")||"-";
+    const res=(c.resistances||[]).slice(0,2).join("/")||"-";
+    return '<div class="lcard" onclick="openAnalyze(\\''+c.code+'\\')" title="点击查看 '+esc(c.name)+' 详细分析">'+
+      '<div class="lc-head"><span class="lc-name">'+esc(c.name)+'</span><span class="lc-ind">'+esc(c.industry||'')+'</span></div>'+
+      '<div class="lc-code">'+c.code+'</div>'+
+      '<div class="lc-price">'+fmt(c.price)+' <span class="lc-pct '+(c.pct>=0?'up':'down')+'">'+(c.pct>=0?'+':'')+fmt(c.pct,2)+'%</span></div>'+
+      '<div class="lc-row"><span>信号</span><b>'+esc(c.verdict)+' '+c.score+'</b></div>'+
+      '<div class="lc-row"><span>位置</span><b>'+esc(c.zone)+'</b></div>'+
+      '<div class="lc-row"><span>情绪/增长</span><b>'+esc(c.sentiment)+' / '+esc(c.growth)+'</b></div>'+
+      '<div class="lc-row"><span>支撑</span><b style="color:var(--down)">'+sup+'</b></div>'+
+      '<div class="lc-row"><span>压力</span><b style="color:var(--up)">'+res+'</b></div>'+
+      '<div class="lc-signal"><span class="badge '+clsMap[t.cls]+'">'+esc(t.label)+'</span></div>'+
+      '</div>';
+  }).join('');
+  let pager='';
+  if(totalPages>1){
+    let pgBtns='';
+    for(let i=1;i<=totalPages;i++){
+      pgBtns+='<button class="'+(i===lcPage?'pg-now':'')+'" onclick="lcPage='+i+';renderLcPage()">'+i+'</button>';
+    }
+    pager='<div class="pager">'+
+      '<button onclick="lcPage--;renderLcPage()" '+(lcPage<=1?'disabled':'')+'>‹ 上一页</button>'+
+      '<span class="pg">'+lcPage+' / '+totalPages+'</span>'+
+      pgBtns+
+      '<button onclick="lcPage++;renderLcPage()" '+(lcPage>=totalPages?'disabled':'')+'>下一页 ›</button>'+
+      '</div>';
+  }
+  el.innerHTML='<div class="lcards">'+cards+'</div>'+pager;
+}
 async function loadLeadersCards(){
   const el=document.getElementById("leadersCards");
   try{
     const j=await fetch('/api/leaders-cards').then(r=>r.json());
     if(!j.results||!j.results.length){el.innerHTML='<div class="empty">龙头数据暂不可用（可能限流）</div>';return;}
-    const cards=j.results.map(c=>{
-      const t=c.timing||{label:'观望',cls:'neutral'};
-      const sup=(c.supports||[]).slice(-2).join("/")||"-";
-      const res=(c.resistances||[]).slice(0,2).join("/")||"-";
-      return '<div class="lcard" onclick="openAnalyze(\\''+c.code+'\\')" title="点击查看 '+esc(c.name)+' 详细分析">'+
-        '<div class="lc-head"><span class="lc-name">'+esc(c.name)+'</span><span class="lc-ind">'+esc(c.industry||'')+'</span></div>'+
-        '<div class="lc-code">'+c.code+'</div>'+
-        '<div class="lc-price">'+fmt(c.price)+' <span class="lc-pct '+(c.pct>=0?'up':'down')+'">'+(c.pct>=0?'+':'')+fmt(c.pct,2)+'%</span></div>'+
-        '<div class="lc-row"><span>信号</span><b>'+esc(c.verdict)+' '+c.score+'</b></div>'+
-        '<div class="lc-row"><span>位置</span><b>'+esc(c.zone)+'</b></div>'+
-        '<div class="lc-row"><span>情绪/增长</span><b>'+esc(c.sentiment)+' / '+esc(c.growth)+'</b></div>'+
-        '<div class="lc-row"><span>支撑</span><b style="color:var(--down)">'+sup+'</b></div>'+
-        '<div class="lc-row"><span>压力</span><b style="color:var(--up)">'+res+'</b></div>'+
-        '<div class="lc-signal"><span class="badge '+clsMap[t.cls]+'">'+esc(t.label)+'</span></div>'+
-        '</div>';
-    }).join('');
+    lcData=j.results;
+    lcPage=1;
+    renderLcPage();
+    return;
+    return;
+
     el.innerHTML=cards+(j.cached?'<div style="grid-column:1/-1;color:var(--dim);font-size:11px">已缓存 · 60秒自动刷新</div>':'');
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
@@ -623,7 +660,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const w = await fetch(DSH_API + '/api/stock/leaders').then(r => r.json());
-      const list = (w.leaders || []).slice(0, 16); // 代表性龙头
+      const list = (w.leaders || []).slice(0, 48); // 龙头卡片：48 只（3页×16）
       const results = [];
       const analyzeOne = async (it) => {
         try {
