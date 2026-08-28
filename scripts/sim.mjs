@@ -13,6 +13,7 @@
  *   node sim.mjs status                             查看账户状态
  */
 import { run as fetchRun } from "./fetch.mjs";
+import { fetchIndex } from "./quotes.mjs";
 import { run as analyzeRun } from "./analyze.mjs";
 import fs from "node:fs";
 import path from "node:path";
@@ -59,25 +60,33 @@ async function analyzeStock(code) {
   return { data: null, res };
 }
 
-// ---------- 沪深300基准（东财指数日K） ----------
-// 返回 { today, history: [{date,close}] }；失败返回 null
+// ---------- 沪深300基准（东财指数日K + 腾讯/新浪当日兜底） ----------
+// 返回 { today: {date,close,pct?}, history: [{date,close}] }；失败返回 null
 async function fetchBenchmark() {
+  const end = "20500101", beg = "20250101";
+  const url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.000300" +
+    "&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&beg=" + beg +
+    "&end=" + end + "&lmt=500&ut=fa5fd1943c7b386f172d6893dbfba10b";
   try {
-    const end = "20500101", beg = "20250101";
-    const url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.000300" +
-      "&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&beg=" + beg +
-      "&end=" + end + "&lmt=500&ut=fa5fd1943c7b386f172d6893dbfba10b";
     const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://quote.eastmoney.com/" } });
-    if (!r.ok) return null;
-    const j = await r.json();
-    const rows = (j.data && j.data.klines) || [];
-    if (!rows.length) return null;
-    const history = rows.map(line => {
-      const p = line.split(",");
-      return { date: p[0], close: Number(p[2]) };
-    });
-    return { today: history[history.length - 1], history };
-  } catch (e) { return null; }
+    if (r.ok) {
+      const j = await r.json();
+      const rows = (j.data && j.data.klines) || [];
+      if (rows.length) {
+        const history = rows.map(line => {
+          const p = line.split(",");
+          return { date: p[0], close: Number(p[2]) };
+        });
+        return { today: history[history.length - 1], history };
+      }
+    }
+  } catch (e) { /* fallthrough */ }
+  // 东财限流时：腾讯/新浪指数当日行情兜底（无历史，仅当日涨跌 pct）
+  try {
+    const idx = await fetchIndex("000300");
+    if (idx) return { today: { date: String(idx.time || "").split(" ")[0] || today(), close: idx.price, pct: idx.pct, source: idx.source }, history: [] };
+  } catch (e) { /* fallthrough */ }
+  return null;
 }
 
 // ---------- 决策：当前持仓是否卖出 ----------

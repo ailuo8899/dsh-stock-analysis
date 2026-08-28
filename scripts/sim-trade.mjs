@@ -12,6 +12,7 @@
  *   node sim-trade.mjs status                                      查看账户
  */
 import { loadAccount, saveAccount, analyzeStock, executeBuy, executeSell, accountValue, fetchBenchmark, SIM_DIR, fmt, today } from "./sim.mjs";
+import { fetchQuoteOne } from "./quotes.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -121,7 +122,9 @@ export async function run(argv) {
   if (args.cmd === "snapshot") {
     const quotes = {};
     for (const h of acc.holdings) {
-      try { const { res } = await analyzeStock(h.code); quotes[h.code] = res.quote; } catch (e) { quotes[h.code] = { price: h.costPrice }; }
+      try { const { res } = await analyzeStock(h.code); quotes[h.code] = res.quote; continue; } catch (e) { /* fallthrough */ }
+      try { const q = await fetchQuoteOne(h.code); if (q) { quotes[h.code] = q; continue; } } catch (e) { /* fallthrough */ }
+      quotes[h.code] = { price: h.costPrice };
     }
     const { totalValue, holdingsValue, cash } = accountValue(acc, quotes);
     const totalPnl = totalValue - acc.capital;
@@ -132,6 +135,7 @@ export async function run(argv) {
       const startBar = bench.history.find(h2 => h2.date >= acc.startDate) || bench.history[0];
       if (startBar && bench.today && startBar.close > 0) benchPct = (bench.today.close - startBar.close) / startBar.close * 100;
     }
+    if (benchPct === null && bench && bench.today && typeof bench.today.pct === "number") benchPct = bench.today.pct; // 东财限流时用当日指数涨跌
     acc.daily.push({
       date, totalValue: Number(totalValue.toFixed(2)), cash: Number(cash.toFixed(2)), holdingsValue: Number(holdingsValue.toFixed(2)),
       pnl: Number(totalPnl.toFixed(2)), pnlPct: Number(totalPnlPct.toFixed(2)),

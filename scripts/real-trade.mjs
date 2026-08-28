@@ -10,6 +10,7 @@
  *   node real-trade.mjs status                                      查看真实账户
  */
 import { analyzeStock, fetchBenchmark, accountValue, fmt, today } from "./sim.mjs";
+import { fetchQuoteOne } from "./quotes.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -115,7 +116,9 @@ export async function run(argv) {
   if (args.cmd === "snapshot") {
     const quotes = {};
     for (const h of acc.holdings) {
-      try { const { res } = await analyzeStock(h.code); quotes[h.code] = res.quote; } catch (e) { quotes[h.code] = { price: h.costPrice }; }
+      try { const { res } = await analyzeStock(h.code); quotes[h.code] = res.quote; continue; } catch (e) { /* fallthrough */ }
+      try { const q = await fetchQuoteOne(h.code); if (q) { quotes[h.code] = q; continue; } } catch (e) { /* fallthrough */ }
+      quotes[h.code] = { price: h.costPrice };
     }
     let holdingsValue = 0, costValue = 0;
     for (const h of acc.holdings) {
@@ -131,6 +134,7 @@ export async function run(argv) {
       const startBar = bench.history.find(h2 => h2.date >= acc.startDate) || bench.history[0];
       if (startBar && bench.today && startBar.close > 0) benchPct = (bench.today.close - startBar.close) / startBar.close * 100;
     }
+    if (benchPct === null && bench && bench.today && typeof bench.today.pct === "number") benchPct = bench.today.pct; // 东财限流时用当日指数涨跌
     acc.daily.push({
       date, holdingsValue: Number(holdingsValue.toFixed(2)), costValue: Number(costValue.toFixed(2)),
       pnl: Number(pnl.toFixed(2)), pnlPct: Number(pnlPct.toFixed(2)),

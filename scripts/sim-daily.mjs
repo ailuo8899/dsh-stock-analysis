@@ -8,8 +8,9 @@
  *
  * 用法: node sim-daily.mjs [--out 日报目录] [--candidates "600519,000858,..."]
  */
-import { loadAccount, saveAccount, analyzeStock, shouldSell, shouldBuy, executeBuy, executeSell, accountValue, SIM_DIR, fmt, today } from "./sim.mjs";
+import { loadAccount, saveAccount, analyzeStock, shouldSell, shouldBuy, executeBuy, executeSell, accountValue, fetchBenchmark, SIM_DIR, fmt, today } from "./sim.mjs";
 import { run as screenRun } from "./screen.mjs";
+import { fetchQuoteOne } from "./quotes.mjs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -67,6 +68,7 @@ export async function run(argv) {
       }
     } catch (e) {
       console.warn("[sim] 分析持仓失败 " + h.code + ":", e.message);
+      try { const q = await fetchQuoteOne(h.code); if (q) { quotes[h.code] = q; continue; } } catch (e2) { /* fallthrough */ }
       quotes[h.code] = { price: h.costPrice };
     }
   }
@@ -102,10 +104,26 @@ export async function run(argv) {
 
   // ---------- 3. 账户快照 ----------
   // 补充未获取到报价的持仓
-  for (const h of acc.holdings) if (!quotes[h.code]) quotes[h.code] = { price: h.costPrice };
+  for (const h of acc.holdings) if (!quotes[h.code]) {
+    try { const q = await fetchQuoteOne(h.code); if (q) quotes[h.code] = q; else quotes[h.code] = { price: h.costPrice }; } catch (e) { quotes[h.code] = { price: h.costPrice }; }
+  }
   const { totalValue, holdingsValue, cash } = accountValue(acc, quotes);
   const totalPnl = totalValue - acc.capital;
   const totalPnlPct = totalPnl / acc.capital * 100;
+
+  // 沪深300 基准：账户起始日指数 vs 今日指数
+  const bench = await fetchBenchmark();
+  let benchPct = null;
+  if (bench && bench.history.length) {
+    const startDate = acc.startDate;
+    const startBar = bench.history.find(h => h.date >= startDate) || bench.history[0];
+    const nowBar = bench.today;
+    if (startBar && nowBar && startBar.close > 0) {
+      benchPct = (nowBar.close - startBar.close) / startBar.close * 100;
+    }
+  }
+  if (benchPct === null && bench && bench.today && typeof bench.today.pct === "number") benchPct = bench.today.pct; // 东财限流时用当日指数涨跌
+
   acc.daily.push({
     date,
     totalValue: Number(totalValue.toFixed(2)),
@@ -113,6 +131,8 @@ export async function run(argv) {
     holdingsValue: Number(holdingsValue.toFixed(2)),
     pnl: Number(totalPnl.toFixed(2)),
     pnlPct: Number(totalPnlPct.toFixed(2)),
+    benchPct: benchPct === null ? null : Number(benchPct.toFixed(2)),
+    excessPct: benchPct === null ? null : Number((totalPnlPct - benchPct).toFixed(2)),
     actions: actions.map(a => ({ type: a.type, code: a.code, name: a.name, price: a.price, shares: a.shares, pnl: a.pnl, pnlPct: a.pnlPct, reason: a.reason })),
   });
   acc.lastRunDate = date;
@@ -149,6 +169,8 @@ function buildReport(acc, actions, quotes) {
     "| 初始资金 | " + fmt(acc.capital, 0) + " 元 |",
     "| 当前总资产 | **" + fmt(last.totalValue, 0) + " 元** |",
     "| 累计盈亏 | **" + (last.pnl >= 0 ? "+" : "") + fmt(last.pnl, 0) + " 元（" + (last.pnlPct >= 0 ? "+" : "") + fmt(last.pnlPct, 2) + "%）** |",
+    "| 沪深300同期 | " + (last.benchPct === null || last.benchPct === undefined ? "—" : (last.benchPct >= 0 ? "+" : "") + fmt(last.benchPct, 2) + "%") + " |",
+    "| **超额收益** | " + (last.excessPct === null || last.excessPct === undefined ? "—" : "**" + (last.excessPct >= 0 ? "+" : "") + fmt(last.excessPct, 2) + "%**") + " |",
     "| 现金 | " + fmt(last.cash, 0) + " 元 |",
     "| 持仓市值 | " + fmt(last.holdingsValue, 0) + " 元 |",
     "| 持仓数 | " + acc.holdings.length + "/" + acc.rules.maxHoldings + " |",
@@ -174,10 +196,12 @@ function buildReport(acc, actions, quotes) {
   }
   if (!acc.holdings.length) md.push("（空仓）");
 
-  md.push("", "## 净值曲线（最近10日）", "", "| 日期 | 总资产 | 盈亏% |", "|---|---|---|");
+  md.push("", "## 净值曲线（最近10日）", "", "| 日期 | 总资产 | 组合盈亏% | 沪深300% | 超额% |", "|---|---|---|---|---|");
   const recent = acc.daily.slice(-10);
   for (const d of recent) {
-    md.push("| " + d.date + " | " + fmt(d.totalValue, 0) + " | " + (d.pnlPct >= 0 ? "+" : "") + fmt(d.pnlPct, 2) + "% |");
+    md.push("| " + d.date + " | " + fmt(d.totalValue, 0) + " | " + (d.pnlPct >= 0 ? "+" : "") + fmt(d.pnlPct, 2) + "% | " +
+      (d.benchPct === null || d.benchPct === undefined ? "—" : (d.benchPct >= 0 ? "+" : "") + fmt(d.benchPct, 2) + "%") + " | " +
+      (d.excessPct === null || d.excessPct === undefined ? "—" : (d.excessPct >= 0 ? "+" : "") + fmt(d.excessPct, 2) + "%") + " |");
   }
 
   md.push("", "## 交易规则（当前）", "");
