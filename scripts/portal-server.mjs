@@ -331,15 +331,31 @@ const server = http.createServer(async (req, res) => {
         const wlRaw = fsx.existsSync(wlFile) ? JSON.parse(fsx.readFileSync(wlFile, 'utf8')) : [];
         const codes = (wlRaw || []).map(it => it.code);
         const wQ = codes.length ? await fetchQuotes(codes) : {};
-        watchlist = (wlRaw || []).map(it => {
-          const q = wQ[String(it.code).replace(/^(sh|sz)/, '')];
-          if (!q) return null;
-          let label = '观望', cls = 'neutral';
-          if (q.pct >= 5) { label = '追高风险'; cls = 'caution'; }
-          else if (q.pct >= 2) { label = '可关注'; cls = 'watch'; }
-          else if (q.pct <= -3) { label = '回调关注'; cls = 'watch'; }
-          return { code: it.code, name: q.name, industry: it.industry, price: q.price, pct: q.pct, timing: { label, cls }, verdict: '-', score: 0, zone: '-', sentiment: '-', growth: '-' };
-        }).filter(Boolean);
+        // 完整五维分析（东财K线 → 腾讯/新浪兜底），失败时退回涨跌幅规则
+        const wlAnalyzeOne = async (it) => {
+          try {
+            const tmp = '/tmp/portal-sum-' + it.code + '-' + Date.now() + '.json';
+            await localFetchRun([it.code, '--days', '90', '--out', tmp]);
+            const a = await localAnalyzeRun([tmp]);
+            const s = a.signals, p = a.positionAnalysis, se = a.sentiment, g = a.growth, q = a.quote;
+            let label = '观望', cls = 'neutral';
+            if (s.verdict === '买入' && p && p.buyScore >= 40 && g && g.score >= 30 && q.pct < 5) { label = '可买入'; cls = 'buy'; }
+            else if (p && p.sellScore >= 55) { label = '注意止盈'; cls = 'sell'; }
+            else if (s.verdict === '买入' || s.verdict === '关注') { label = '可关注'; cls = 'watch'; }
+            else if (s.verdict === '回避' || s.verdict === '谨慎') { label = '回避/谨慎'; cls = 'caution'; }
+            return { code: it.code, name: a.meta.name, industry: it.industry, price: q.price, pct: q.pct, timing: { label, cls }, verdict: s.verdict, score: s.score, zone: p.zone, sentiment: se.label, growth: g.label, supports: (a.levels.supports || []).map(x => x.price), resistances: (a.levels.resistances || []).map(x => x.price) };
+          } catch (e) {
+            const q = wQ[String(it.code).replace(/^(sh|sz)/, '')];
+            if (!q) return null;
+            let label = '观望', cls = 'neutral';
+            if (q.pct >= 5) { label = '追高风险'; cls = 'caution'; }
+            else if (q.pct >= 2) { label = '可关注'; cls = 'watch'; }
+            else if (q.pct <= -3) { label = '回调关注'; cls = 'watch'; }
+            return { code: it.code, name: q.name, industry: it.industry, price: q.price, pct: q.pct, timing: { label, cls }, verdict: '-', score: 0, zone: '-', sentiment: '-', growth: '-' };
+          }
+        };
+        const wlResults = await Promise.all((wlRaw || []).map(wlAnalyzeOne));
+        watchlist = wlResults.filter(Boolean);
       } catch (e) {}
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
@@ -477,20 +493,27 @@ const server = http.createServer(async (req, res) => {
       const results = [];
       const analyzeOne = async (it) => {
         try {
-          const tmp = '/tmp/portal-wl-' + it.code + '-' + Date.now() + '.json';
           let analysis = null;
-          // fetchQuoteOne 已静态导入
-          const q0 = await fetchQuoteOne(it.code);
-          if (!q0) return null;
-          analysis = {
-            meta: { code: it.code, name: q0.name },
-            quote: { price: q0.price, pct: q0.pct, prevClose: q0.prevClose },
-            signals: { score: 0, verdict: '观望', factors: [] },
-            positionAnalysis: { zone: '-', buyScore: 0, sellScore: 0 },
-            sentiment: { label: '-', score: 0 },
-            growth: { label: '-', score: 0 },
-            degraded: true, source: q0.source,
-          };
+          // 完整管线：东财K线 → 腾讯/新浪K线兜底（fetch.mjs 已多源）
+          try {
+            const tmp = '/tmp/portal-wl-' + it.code + '-' + Date.now() + '.json';
+            await localFetchRun([it.code, '--days', '90', '--out', tmp]);
+            analysis = await localAnalyzeRun([tmp]);
+          } catch (e) { /* fallthrough */ }
+          if (!analysis) {
+            // 完全降级：仅实时行情
+            const q0 = await fetchQuoteOne(it.code);
+            if (!q0) return null;
+            analysis = {
+              meta: { code: it.code, name: q0.name },
+              quote: { price: q0.price, pct: q0.pct, prevClose: q0.prevClose },
+              signals: { score: 0, verdict: '观望', factors: [] },
+              positionAnalysis: { zone: '-', buyScore: 0, sellScore: 0 },
+              sentiment: { label: '-', score: 0 },
+              growth: { label: '-', score: 0 },
+              degraded: true, source: q0.source,
+            };
+          }
           const s2 = analysis.signals, p2 = analysis.positionAnalysis, se = analysis.sentiment, g = analysis.growth, q = analysis.quote;
           let label = '观望', cls = 'neutral';
           if (s2.verdict === '买入' && p2 && p2.buyScore >= 40 && g && g.score >= 30 && q.pct < 5) { label = '可买入'; cls = 'buy'; }
