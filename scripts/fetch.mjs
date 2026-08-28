@@ -1,20 +1,25 @@
 #!/usr/bin/env node
 /**
- * fetch.mjs — 股票数据抓取（A股：实时行情 / 日K线 / 相关新闻）
+ * fetch.mjs — 股票数据抓取（A股：实时行情 / 日K线 / 相关新闻 / 基本面 / 估值）
  *
  * 数据源（均免费、无需 key、UTF-8 JSON）：
  *  - 代码/名称解析：东方财富 suggest 接口
  *  - 实时行情     ：东方财富 push2.eastmoney.com/api/qt/stock/get
  *  - 日K线(前复权) ：东方财富 push2his.eastmoney.com/api/qt/stock/kline/get
- *  - 相关新闻     ：东方财富 7x24 快讯（按股票名称/代码过滤）
+ *  - 相关新闻     ：东方财富 7x24 快讯 + 腾讯个股新闻 + 东财公告（按股票名称/代码过滤）
+ *  - 基本面       ：东方财富 F10 财务指标（营收/净利同比、ROE、毛利率、EPS）
+ *  - 估值         ：东方财富 push2（动态PE/TTM PE/PB/总市值）
  *
  * 用法：
  *   node fetch.mjs <代码或名称> [--days 120] [--out out.json]
  *   node fetch.mjs 600519
  *   node fetch.mjs 贵州茅台 --days 250
+ *   node fetch.mjs 1.600519   （直接传 secid，供 screen.mjs 复用）
  *
  * 输出（stdout 或 --out 文件）：
- *   { meta, quote, kline: [{date,open,close,high,low,volume,amount}], news: [{title,summary,url,time,kind}] }
+ *   { meta, quote, kline: [{date,open,close,high,low,volume,amount}], news: [{title,summary,url,time,kind}],
+ *     fundamentals: [{reportDate,reportName,revenue,revenueYoy,netProfit,netProfitYoy,roe,grossMargin,eps}],
+ *     valuation: {peDynamic,peTtm,peStatic,pb,totalMv,circMv,netProfitYoy} }
  */
 
 const UA = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126 Safari/537.36", "Referer": "https://quote.eastmoney.com/" };

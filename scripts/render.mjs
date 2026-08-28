@@ -174,6 +174,7 @@ function renderHTML(data, result, svg) {
   const resItems = (lv.resistances || []).map(x => '<div class="lv-item lv-r"><span class="lv-price">' + fmt(x.price) + '</span><span class="lv-why">' + esc(x.why) + '</span></div>').join("");
 
   const pos = result.position;
+  const posAn = result.positionAnalysis || null;
   const scoreBarPos = Math.max(0, Math.min(100, (s.score + 100) / 2));
 
   // 未来增长（基本面）
@@ -355,6 +356,16 @@ tr:last-child td{border-bottom:none}
     </div>
   </div>
 
+      <div class="panel"><h2>位置研判（双向）</h2>
+        <div class="senti-head">
+          <span class="zone-badge ${posAn ? (posAn.zone === '高位区' ? 'z-high' : posAn.zone === '低位区' ? 'z-low' : posAn.zone === '中低位' ? 'z-midlow' : posAn.zone === '中高位' ? 'z-midhigh' : 'z-mid') : ''}">${posAn ? esc(posAn.zone) : '-'}</span>
+          <span class="senti-label" style="color:var(--txt)">${posAn ? esc(posAn.bias) : '暂无'}</span>
+          <span style="color:var(--dim);font-size:12px">买${posAn ? posAn.buyScore : '-'} / 卖${posAn ? posAn.sellScore : '-'}</span>
+        </div>
+        <div class="vsum">${posAn ? (posAn.sellScore >= 55 ? '⚠ 高位卖出信号强，持仓者可考虑止盈/减仓。' : posAn.buyScore >= 55 ? '✅ 低位买入信号强，可关注低吸机会。' : '位置中性，等待方向明确。') : '暂无位置数据'}</div>
+        ${posAn && posAn.sellNotes.length ? '<div style="margin:10px 0;border-top:1px solid var(--line)"></div><div style="font-size:12px;color:var(--dim)">' + posAn.sellNotes.map(n => '<div>⚠ ' + esc(n) + '</div>').join('') + '</div>' : ''}
+        ${posAn && posAn.buyNotes.length ? '<div style="margin:10px 0;border-top:1px solid var(--line)"></div><div style="font-size:12px;color:var(--dim)">' + posAn.buyNotes.map(n => '<div>✅ ' + esc(n) + '</div>').join('') + '</div>' : ''}
+      </div>
   <div class="vgrid">
     <div class="panel">
       <h2>市场情绪</h2>
@@ -455,6 +466,13 @@ function renderSummary(data, result, svg) {
     : "";
   const relNews = (se.news || []).filter(n => n.kind === "related").slice(0, 3)
     .map(n => "[" + n.senti.label + "] " + n.title).join("；") || "暂无直接相关新闻";
+  // 当日涨幅过大 → 追高风险提示（与 screen.mjs 动量惩罚口径一致）
+  const pct = q.pct;
+  let chaseRiskLine = null;
+  if (pct >= 19.5) chaseRiskLine = "当日涨停（+" + fmt(pct, 1) + "%），追高风险极大";
+  else if (pct >= 9.8) chaseRiskLine = "当日接近涨停（+" + fmt(pct, 1) + "%），追高风险极大";
+  else if (pct >= 7) chaseRiskLine = "当日大涨 +" + fmt(pct, 1) + "%，短线追高风险";
+  else if (pct >= 5) chaseRiskLine = "当日上涨 +" + fmt(pct, 1) + "%，追高需谨慎";
   return [
     "### 📈 " + m.name + "（" + m.code + "）股票分析",
     "",
@@ -462,7 +480,7 @@ function renderSummary(data, result, svg) {
     "",
     "![K线图](data:image/svg+xml;base64," + b64 + ")",
     "",
-    "#### 买卖时机：" + s.verdict + "（信号分 " + s.score + "/100）",
+    "#### 买卖时机：" + s.verdict + "（信号分 " + s.score + "/100）" + (chaseRiskLine ? " ⚠ " + chaseRiskLine : ""),
     "",
     s.summary,
     "",
@@ -470,6 +488,8 @@ function renderSummary(data, result, svg) {
     "",
     "**支撑位**：" + (result.levels.supports || []).map(x => fmt(x.price) + "(" + x.why + ")").join("、"),
     "**压力位**：" + (result.levels.resistances || []).map(x => fmt(x.price) + "(" + x.why + ")").join("、"),
+    "",
+    "#### 📍 位置研判：" + (result.positionAnalysis ? result.positionAnalysis.zone + " · " + result.positionAnalysis.bias + "（买" + result.positionAnalysis.buyScore + "/卖" + result.positionAnalysis.sellScore + "）" : "暂无"),
     "",
     "#### 🧠 市场情绪：" + se.label + "（" + (se.score >= 0 ? "+" : "") + fmt(se.score, 2) + "）",
     "",
@@ -483,7 +503,19 @@ function renderSummary(data, result, svg) {
     posLine,
     "",
     "> 详细报告（完整 K 线图、技术指标表、盈亏计算器）见 HTML 文件。⚠️ 分析仅供参考，不构成投资建议。",
+    "",
+    "> 📅 数据时效：" + (isMarketHours() ? "**盘中数据**（约延迟数十秒，信号可能随交易变化）" : "**收盘数据**（当日最终值，信号稳定）") + "。技术指标基于历史行情，不预测未来，请结合自身风险承受能力决策。",
   ].join("\n");
+}
+
+/** 是否处于 A 股交易时段（工作日 9:30-11:30, 13:00-15:00） */
+function isMarketHours() {
+  const now = new Date();
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;
+  const h = now.getHours(), m = now.getMinutes();
+  const t = h * 60 + m;
+  return (t >= 9 * 60 + 30 && t <= 11 * 60 + 30) || (t >= 13 * 60 && t <= 15 * 60);
 }
 
 // ---------- 主流程 ----------
