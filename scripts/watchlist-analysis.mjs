@@ -28,9 +28,29 @@ function parseArgs(argv) {
 async function analyzeOne(code) {
   const os = await import("node:os");
   const tmp = path.join(os.tmpdir(), "wl-" + code + "-" + Date.now() + ".json");
-  await fetchRun([code, "--days", "90", "--out", tmp]);
-  const res = await analyzeRun([tmp, "--out", tmp + ".res.json"]);
-  return { code, res };
+  try {
+    // 东财 K 线（完整技术信号）
+    await fetchRun([code, "--days", "90", "--out", tmp]);
+    const res = await analyzeRun([tmp, "--out", tmp + ".res.json"]);
+    return { code, res, full: true };
+  } catch (e) {
+    // 东财限流：用多源行情降级（腾讯/新浪）
+    const { fetchQuoteOne } = await import("./quotes.mjs");
+    const q = await fetchQuoteOne(code);
+    if (!q) throw e;
+    // 构造简化分析结果
+    const res = {
+      meta: { code, name: q.name },
+      quote: { price: q.price, pct: q.pct, prevClose: q.prevClose, high: q.high, low: q.low },
+      signals: { score: 0, verdict: "观望", factors: [] },
+      positionAnalysis: { zone: "-", buyScore: 0, sellScore: 0, bias: "-" },
+      sentiment: { label: "-", score: 0 },
+      growth: { label: "-", score: 0 },
+      levels: { supports: [], resistances: [] },
+      degraded: true, source: q.source,
+    };
+    return { code, res, full: false };
+  }
 }
 
 export async function run(argv) {

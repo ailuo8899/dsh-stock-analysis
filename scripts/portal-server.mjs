@@ -347,8 +347,27 @@ const server = http.createServer(async (req, res) => {
       const analyzeOne = async (it) => {
         try {
           const tmp = '/tmp/portal-wl-' + it.code + '-' + Date.now() + '.json';
-          await localFetchRun([it.code, '--days', '90', '--out', tmp]);
-          const analysis = await localAnalyzeRun([tmp, '--out', tmp + '.res.json']);
+          let analysis = null;
+          try {
+            await Promise.race([
+              localFetchRun([it.code, '--days', '90', '--out', tmp]),
+              new Promise((_, rej) => setTimeout(() => rej(new Error('ef-timeout')), 6000))
+            ]);
+            analysis = await localAnalyzeRun([tmp, '--out', tmp + '.res.json']);
+          } catch (ef) {
+            const { fetchQuoteOne } = await import('./quotes.mjs');
+            const q = await fetchQuoteOne(it.code);
+            if (!q) return null;
+            analysis = {
+              meta: { code: it.code, name: q.name },
+              quote: { price: q.price, pct: q.pct, prevClose: q.prevClose },
+              signals: { score: 0, verdict: '观望', factors: [] },
+              positionAnalysis: { zone: '-', buyScore: 0, sellScore: 0 },
+              sentiment: { label: '-', score: 0 },
+              growth: { label: '-', score: 0 },
+              degraded: true, source: q.source,
+            };
+          }
           const s2 = analysis.signals, p2 = analysis.positionAnalysis, se = analysis.sentiment, g = analysis.growth, q = analysis.quote;
           let label = '观望', cls = 'neutral';
           if (s2.verdict === '买入' && p2 && p2.buyScore >= 40 && g && g.score >= 30 && q.pct < 5) { label = '可买入'; cls = 'buy'; }
@@ -361,7 +380,7 @@ const server = http.createServer(async (req, res) => {
           else if (g && g.score >= 60) comment = '基本面高增长，可跟踪';
           else if (s2.verdict === '回避') comment = '技术面弱，建议回避';
           else comment = '信号中性，观望为主';
-          return { code: it.code, name: res.meta.name, industry: it.industry, price: q.price, pct: q.pct, timing: { label, cls }, verdict: s2.verdict, score: s2.score, zone: p2.zone, sentiment: se.label, growth: g.label, comment };
+          return { code: it.code, name: analysis.meta.name, industry: it.industry, price: q.price, pct: q.pct, timing: { label, cls }, verdict: s2.verdict, score: s2.score, zone: p2.zone, sentiment: se.label, growth: g.label, comment, degraded: analysis.degraded || false, source: analysis.source || 'eastmoney' };
         } catch (e) { return null; }
       };
       const CONC = 2;
