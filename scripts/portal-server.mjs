@@ -191,17 +191,24 @@ function renderLcPage(){
 }
 async function loadLeadersCards(){
   const el=document.getElementById("leadersCards");
-  try{
-    const j=await fetch('/api/leaders-cards').then(r=>r.json());
-    if(!j.results||!j.results.length){el.innerHTML='<div class="empty">龙头数据暂不可用（可能限流）</div>';return;}
-    lcData=j.results;
-    lcPage=1;
-    renderLcPage();
-    return;
-    return;
-
-    el.innerHTML=cards+(j.cached?'<div style="grid-column:1/-1;color:var(--dim);font-size:11px">已缓存 · 60秒自动刷新</div>':'');
-  }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
+  // 带重试：最多 3 次，间隔递增（后端首轮分析较慢）
+  for(let attempt=1;attempt<=3;attempt++){
+    try{
+      if(attempt>1)el.innerHTML='<div class="loading">龙头分析加载中…（第 '+attempt+' 次尝试）</div>';
+      const j=await fetch('/api/leaders-cards').then(r=>r.json());
+      if(!j.results||!j.results.length){el.innerHTML='<div class="empty">龙头数据暂不可用（可能限流）</div>';return;}
+      lcData=j.results;
+      lcPage=1;
+      renderLcPage();
+      return;
+    }catch(e){
+      if(attempt<3){
+        await new Promise(r=>setTimeout(r,attempt*2000));
+      }else{
+        el.innerHTML='<div class="err">龙头数据加载失败：'+esc(e.message)+'<br><button onclick="loadLeadersCards()" style="margin-top:8px;padding:6px 16px;border:1px solid var(--blue);background:none;color:var(--blue);border-radius:8px;cursor:pointer;font-size:12px">↻ 重试</button></div>';
+      }
+    }
+  }
 }
 
 function openAnalyze(code){
@@ -868,4 +875,64 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log("📈 股票分析平台已启动: http://127.0.0.1:" + PORT + "/");
+  // 启动预热：后台生成龙头卡片缓存，避免首次访问等待分析
+  setTimeout(async () => {
+    try {
+      const w = await fetch(DSH_API + '/api/stock/leaders').then(r => r.json());
+      const list = (w.leaders || []).slice(0, 48);
+      const results = [];
+      const analyzeOne = async (it) => {
+        try {
+          let analysis = null;
+          try {
+            const tmp = '/tmp/portal-ld-' + it.code + '-' + Date.now() + '.json';
+            await localFetchRun([it.code, '--days', '90', '--out', tmp]);
+            analysis = await localAnalyzeRun([tmp]);
+          } catch (e) {}
+          if (!analysis) {
+            const q0 = await fetchQuoteOne(it.code);
+            if (!q0) return null;
+            analysis = {
+              meta: { code: it.code, name: q0.name },
+              quote: { price: q0.price, pct: q0.pct, prevClose: q0.prevClose },
+              signals: { score: 0, verdict: '观望', factors: [] },
+              positionAnalysis: { zone: '-', buyScore: 0, sellScore: 0 },
+              sentiment: { label: '-', score: 0 },
+              growth: { label: '-', score: 0 },
+              levels: { supports: [], resistances: [] },
+              degraded: true, source: q0.source,
+            };
+          }
+          const s2 = analysis.signals, p2 = analysis.positionAnalysis, se = analysis.sentiment, g = analysis.growth, q = analysis.quote;
+          let label = '观望', cls = 'neutral';
+          if (s2.verdict === '买入' && p2 && p2.buyScore >= 40 && g && g.score >= 30 && q.pct < 5) { label = '可买入'; cls = 'buy'; }
+          else if (p2 && p2.sellScore >= 55) { label = '注意止盈'; cls = 'sell'; }
+          else if (s2.verdict === '买入' || s2.verdict === '关注') { label = '可关注'; cls = 'watch'; }
+          else if (s2.verdict === '回避' || s2.verdict === '谨慎') { label = '回避/谨慎'; cls = 'caution'; }
+          return {
+            code: it.code, name: analysis.meta.name, industry: it.industry,
+            price: q.price, pct: q.pct, timing: { label, cls },
+            verdict: s2.verdict, score: s2.score, zone: p2.zone,
+            buyScore: p2.buyScore, sellScore: p2.sellScore,
+            sentiment: se.label, sentimentScore: se.score,
+            growth: g.label, growthScore: g.score,
+            supports: (analysis.levels && analysis.levels.supports || []).map(x => x.price),
+            resistances: (analysis.levels && analysis.levels.resistances || []).map(x => x.price),
+            summary: (s2.summary || '').slice(0, 80),
+            degraded: analysis.degraded || false, source: analysis.source || 'eastmoney'
+          };
+        } catch (e) { return null; }
+      };
+      const CONC = 4;
+      for (let i = 0; i < list.length; i += CONC) {
+        const batch = list.slice(i, i + CONC);
+        const done = await Promise.all(batch.map(analyzeOne));
+        results.push(...done.filter(Boolean));
+      }
+      leadersCache = { ts: Date.now(), results };
+      console.log("🔥 龙头卡片预缓存完成: " + results.length + " 只");
+    } catch (e) {
+      console.error("预热失败:", e.message);
+    }
+  }, 3000);
 });
