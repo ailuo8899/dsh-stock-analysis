@@ -130,8 +130,8 @@ async function loadSim(){
   const el=document.getElementById("simContent");
   el.innerHTML='<div class="loading">加载中…</div>';
   try{
-    const j=await fetch(DSH+"/api/stock/accounts").then(r=>r.json());
-    const acc=j.sim;
+    const j=await fetch('/api/account/detail').then(r=>r.json());
+    const acc={cash:j.sim.cash, capital:j.sim.capital, holdings:j.sim.items, daily:[{totalValue:j.sim.totalValue}], rules:{maxHoldings:3}};
     if(!acc){el.innerHTML='<div class="empty">模拟账户未初始化</div>';return;}
     const last=acc.daily&&acc.daily.length?acc.daily[acc.daily.length-1]:null;
     let advice='';
@@ -143,11 +143,17 @@ async function loadSim(){
         +'<div style="font-size:12px;color:var(--dim);margin-bottom:4px">'+esc(ar.concentration.note)+'</div>'
         +'<div style="font-size:13px">'+esc(ar.overall)+'</div></div>';
     }catch(e){}
+    const simTotal2=j.sim.totalValue>0?j.sim.totalValue:1;
     const rows=(acc.holdings||[]).map(h=>{
-      const pl=(h.price-h.costPrice)*h.shares;
-      const plPct=h.costPrice>0?(h.price-h.costPrice)/h.costPrice*100:0;
-      return '<tr><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price||h.costPrice)+'</td>'
+      const pl=(h.pl||0);
+      const plPct=h.plPct||0;
+      const todayPl=h.todayPl||0;
+      const todayPlPct=h.todayPlPct||0;
+      const sharePct=h.mv&&simTotal2>0?(h.mv/simTotal2*100):0;
+      return '<tr><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td>'
         +'<td style="color:'+(pl>=0?"var(--up)":"var(--down)")+'">'+(pl>=0?"+":"")+fmt(pl,0)+'<br><span style="font-size:11px">'+(plPct>=0?"+":"")+fmt(plPct,2)+'%</span></td>'
+        +'<td style="color:'+(todayPl>=0?"var(--up)":"var(--down)")+'">'+(todayPl>=0?"+":"")+fmt(todayPl,0)+'<br><span style="font-size:11px">'+(todayPlPct>=0?"+":"")+fmt(todayPlPct,2)+'%</span></td>'
+        +'<td style="font-size:12px">'+fmt(sharePct,1)+'%</td>'
         +'<td style="color:var(--down);font-size:12px">'+(h.stopLoss?fmt(h.stopLoss):"-")+'</td>'
         +'<td style="color:var(--up);font-size:12px">'+(h.takeProfit?fmt(h.takeProfit):"-")+'</td>'
         +'<td style="font-size:12px">'+esc(h.verdict||"-")+' '+fmt(h.score)+'</td></tr>';
@@ -158,7 +164,7 @@ async function loadSim(){
       +'<div class="card"><div class="k">累计盈亏</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?(last.pnl>=0?"+":"")+fmt(last.pnl,0)+"（"+(last.pnlPct>=0?"+":"")+fmt(last.pnlPct,2)+"%）":"-")+'</div></div>'
       +'<div class="card"><div class="k">现金</div><div class="v">'+fmt(acc.cash,0)+'</div></div>'
       +'<div class="card"><div class="k">持仓数</div><div class="v">'+(acc.holdings||[]).length+'/'+(acc.rules?acc.rules.maxHoldings:3)+'</div></div></div>'
-      +'<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>浮盈亏</th><th>止损</th><th>止盈</th><th>信号</th></tr>'+(rows||'<tr><td colspan="8" class="empty">空仓</td></tr>')+'</table>';
+      +'<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>持仓盈亏</th><th>今日盈亏</th><th>占比</th><th>止损</th><th>止盈</th><th>信号</th></tr>'+(rows||'<tr><td colspan="8" class="empty">空仓</td></tr>')+'</table>';
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
 
@@ -220,6 +226,58 @@ const server = http.createServer(async (req, res) => {
       const a = advisorReal([]);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(a));
+      return;
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: e.message }));
+      return;
+    }
+  }
+
+  // 账户明细（成本/现价/持仓盈亏/今日盈亏/持仓占比）
+  if (url.pathname === '/api/account/detail') {
+    try {
+      const fsx = await import('node:fs');
+      const osx = await import('node:os');
+      const pathx = await import('node:path');
+      const dir = pathx.join(process.env.DSH_HOME || (osx.homedir() + '/.dsh'), 'storages', 'stock-sim');
+      const readJson = (f) => { try { return JSON.parse(fsx.readFileSync(pathx.join(dir, f), 'utf8')); } catch (e) { return null; } };
+      const sim = readJson('account.json');
+      const real = readJson('real-account.json');
+      const detail = async (holdings) => {
+        const out = [];
+        let totalValue = 0;
+        for (const h of holdings || []) {
+          let price = h.costPrice, prevClose = null, verdict = '-', score = 0, zone = '-';
+          try {
+            const cached = '/tmp/an-' + h.code + '.json';
+            if (fsx.existsSync(cached)) {
+              const res = JSON.parse(fsx.readFileSync(cached, 'utf8'));
+              price = res.quote.price;
+              prevClose = res.quote.prevClose;
+              verdict = res.signals.verdict;
+              score = res.signals.score;
+              zone = res.positionAnalysis.zone;
+            }
+          } catch (e) {}
+          const mv = price * h.shares;
+          const pl = (price - h.costPrice) * h.shares;
+          const plPct = h.costPrice > 0 ? (price - h.costPrice) / h.costPrice * 100 : 0;
+          const todayPl = prevClose ? (price - prevClose) * h.shares : 0;
+          const todayPlPct = prevClose ? (price - prevClose) / prevClose * 100 : 0;
+          totalValue += mv;
+          out.push({ code: h.code, name: h.name, shares: h.shares, costPrice: h.costPrice, price, prevClose, mv, pl, plPct, todayPl, todayPlPct, stopLoss: h.stopLoss, takeProfit: h.takeProfit, verdict, score, zone });
+        }
+        return { items: out, totalValue };
+      };
+      const simDetail = await detail(sim && sim.holdings);
+      const realDetail = await detail(real && real.holdings);
+      const simTotal = (sim ? sim.cash : 0) + simDetail.totalValue;
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        sim: { cash: sim ? sim.cash : 0, totalValue: simTotal, items: simDetail.items, capital: sim ? sim.capital : 0 },
+        real: { items: realDetail.items, totalValue: realDetail.totalValue }
+      }));
       return;
     } catch (e) {
       res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });

@@ -126,9 +126,15 @@ export function buildHoldingView(h, res) {
   const q = res.quote;
   const pl = (q.price - h.costPrice) * h.shares;
   const plPct = (q.price - h.costPrice) / h.costPrice * 100;
+  // 今日盈亏 = (现价 - 昨收) * 股数
+  const todayPl = q.prevClose ? (q.price - q.prevClose) * h.shares : 0;
+  const todayPlPct = q.prevClose ? (q.price - q.prevClose) / q.prevClose * 100 : 0;
+  const marketValue = q.price * h.shares;
   return {
     ...h,
-    price: q.price, pct: q.pct, pl, plPct,
+    price: q.price, prevClose: q.prevClose, pct: q.pct, pl, plPct,
+    todayPl, todayPlPct,
+    marketValue,
     stopLoss: h.stopLoss, takeProfit: h.takeProfit,
     stopDist: h.stopLoss ? (q.price - h.stopLoss) / q.price * 100 : 0,
     takeDist: h.takeProfit ? (h.takeProfit - q.price) / q.price * 100 : 0,
