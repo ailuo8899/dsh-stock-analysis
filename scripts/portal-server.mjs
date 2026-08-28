@@ -110,6 +110,19 @@ function timing(res){
   return{label:"观望",cls:"neutral"};
 }
 
+// 点击股票 → 切到分析 tab 并自动分析
+function openAnalyze(code){
+  document.querySelectorAll(".topbar nav button").forEach(function(x){x.classList.remove("active");});
+  document.querySelectorAll(".view").forEach(function(v){v.classList.remove("active");});
+  var b=document.querySelector('.topbar nav button[data-view="analyze"]');
+  if(b)b.classList.add("active");
+  var vv=document.getElementById("view-analyze");
+  if(vv)vv.classList.add("active");
+  var q=document.getElementById("q");
+  if(q)q.value=code;
+  doAnalyze();
+}
+
 async function doAnalyze(){
   const v=document.getElementById("q").value.trim();
   if(!v)return;
@@ -155,7 +168,7 @@ async function loadSim(){
       const todayPl=h.todayPl||0;
       const todayPlPct=h.todayPlPct||0;
       const sharePct=h.mv&&simTotal2>0?(h.mv/simTotal2*100):0;
-      return '<tr><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td>'
+      return '<tr style="cursor:pointer" onclick="openAnalyze(\''+h.code+'\')"><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td>'
         +'<td style="color:'+(pl>=0?"var(--up)":"var(--down)")+'">'+(pl>=0?"+":"")+fmt(pl,0)+'<br><span style="font-size:11px">'+(plPct>=0?"+":"")+fmt(plPct,2)+'%</span></td>'
         +'<td style="color:'+(todayPl>=0?"var(--up)":"var(--down)")+'">'+(todayPl>=0?"+":"")+fmt(todayPl,0)+'<br><span style="font-size:11px">'+(todayPlPct>=0?"+":"")+fmt(todayPlPct,2)+'%</span></td>'
         +'<td style="font-size:12px">'+fmt(sharePct,1)+'%</td>'
@@ -190,7 +203,7 @@ async function loadReal(){
         +'<div style="font-size:13px">'+esc(ar.overall)+'</div></div>';
     }catch(e){}
     const rows=(acc.holdings||[]).map(h=>{
-      return '<tr><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+(h.buyDate||"-")+'</td></tr>';
+      return '<tr style="cursor:pointer" onclick="openAnalyze(\''+h.code+'\')"><td><b>'+esc(h.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+h.code+'</span></td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+(h.buyDate||"-")+'</td></tr>';
     }).join("");
     el.innerHTML=advice
       +'<div class="cards">'
@@ -208,7 +221,7 @@ async function loadWatchlist(){
   try{
     const j=await fetch('/api/watchlist-analysis').then(r=>r.json());
     if(!j.results){el.innerHTML='<div class="empty">'+(j.error||'暂无数据')+'</div>';return;}
-    const rows=j.results.map(w=>{const t=w.timing||{label:'观望',cls:'neutral'};return '<tr><td><b>'+esc(w.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+w.code+'</span></td><td>'+fmt(w.price)+'<br><span style="color:'+(w.pct>=0?'var(--up)':'var(--down)')+';font-size:11px">'+(w.pct>=0?'+':'')+fmt(w.pct,2)+'%</span></td><td><span class="badge '+clsMap[t.cls]+'">'+t.label+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td><td style="font-size:12px;color:var(--dim)">'+esc(w.comment||'')+'</td></tr>';}).join('');
+    const rows=j.results.map(w=>{const t=w.timing||{label:'观望',cls:'neutral'};return '<tr style="cursor:pointer" onclick="openAnalyze(\''+w.code+'\')"><td><b>'+esc(w.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+w.code+'</span></td><td>'+fmt(w.price)+'<br><span style="color:'+(w.pct>=0?'var(--up)':'var(--down)')+';font-size:11px">'+(w.pct>=0?'+':'')+fmt(w.pct,2)+'%</span></td><td><span class="badge '+clsMap[t.cls]+'">'+t.label+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td><td style="font-size:12px;color:var(--dim)">'+esc(w.comment||'')+'</td></tr>';}).join('');
     el.innerHTML='<table><tr><th>股票</th><th>现价</th><th>买卖时机</th><th>信号</th><th>位置</th><th>情绪</th><th>增长</th><th>理财师点评</th></tr>'+rows+'</table>';
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
@@ -233,7 +246,7 @@ async function loadDaily(){
       if(sim.holdings&&sim.holdings.length){
         html+='<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>浮盈亏</th><th>时机</th></tr>';
         for(const h of sim.holdings){
-          html+='<tr><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td><td style="color:'+(h.pl>=0?"var(--up)":"var(--down)")+'">'+(h.pl>=0?"+":"")+fmt(h.pl,0)+'（'+(h.plPct>=0?"+":"")+fmt(h.plPct,2)+'%）</td><td>'+(h.timing?esc(h.timing.label):"-")+'</td></tr>';
+          html+='<tr style="cursor:pointer" onclick="openAnalyze(\''+h.code+'\')"><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td><td style="color:'+(h.pl>=0?"var(--up)":"var(--down)")+'">'+(h.pl>=0?"+":"")+fmt(h.pl,0)+'（'+(h.plPct>=0?"+":"")+fmt(h.plPct,2)+'%）</td><td>'+(h.timing?esc(h.timing.label):"-")+'</td></tr>';
         }
         html+='</table>';
       } else html+='<div class="empty">空仓</div>';
@@ -242,7 +255,7 @@ async function loadDaily(){
     if(real&&real.holdings&&real.holdings.length){
       html+='<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>浮盈亏</th><th>时机</th></tr>';
       for(const h of real.holdings){
-        html+='<tr><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td><td style="color:'+(h.pl>=0?"var(--up)":"var(--down)")+'">'+(h.pl>=0?"+":"")+fmt(h.pl,0)+'（'+(h.plPct>=0?"+":"")+fmt(h.plPct,2)+'%）</td><td>'+(h.timing?esc(h.timing.label):"-")+'</td></tr>';
+        html+='<tr style="cursor:pointer" onclick="openAnalyze(\''+h.code+'\')"><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+fmt(h.price)+'</td><td style="color:'+(h.pl>=0?"var(--up)":"var(--down)")+'">'+(h.pl>=0?"+":"")+fmt(h.pl,0)+'（'+(h.plPct>=0?"+":"")+fmt(h.plPct,2)+'%）</td><td>'+(h.timing?esc(h.timing.label):"-")+'</td></tr>';
       }
       html+='</table>';
     } else html+='<div class="empty">暂无真实持仓</div>';
@@ -250,7 +263,7 @@ async function loadDaily(){
     if(wl&&wl.length){
       html+='<table><tr><th>股票</th><th>现价</th><th>买卖时机</th><th>信号</th><th>位置</th><th>情绪</th><th>增长</th></tr>';
       for(const w of wl){
-        html+='<tr><td><b>'+esc(w.name)+'</b> '+w.code+'</td><td>'+fmt(w.price)+'</td><td><span class="badge '+(w.timing?clsMap[w.timing.cls]||"b-neutral":"b-neutral")+'">'+(w.timing?esc(w.timing.label):"-")+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td></tr>';
+        html+='<tr style="cursor:pointer" onclick="openAnalyze(\''+w.code+'\')"><td><b>'+esc(w.name)+'</b> '+w.code+'</td><td>'+fmt(w.price)+'</td><td><span class="badge '+(w.timing?clsMap[w.timing.cls]||"b-neutral":"b-neutral")+'">'+(w.timing?esc(w.timing.label):"-")+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td></tr>';
       }
       html+='</table>';
     } else html+='<div class="empty">暂无自选</div>';
@@ -453,19 +466,28 @@ const server = http.createServer(async (req, res) => {
       for await (const chunk of req) body += chunk;
       const args = JSON.parse(body || '{}');
       if (!args.input) throw new Error('缺少 input');
-      // fetchQuoteOne 已静态导入
-      const q0 = await fetchQuoteOne(args.input);
-      if (!q0) throw new Error('无法获取行情（多源均失败）');
-      const analysis = {
-        meta: { code: q0.code, name: q0.name },
-        quote: { price: q0.price, pct: q0.pct, prevClose: q0.prevClose, high: q0.high, low: q0.low, open: q0.open },
-        signals: { score: 0, verdict: '观望', factors: [] },
-        positionAnalysis: { zone: '-', buyScore: 0, sellScore: 0, bias: '-' },
-        sentiment: { label: '-', score: 0 },
-        growth: { label: '-', score: 0 },
-        levels: { supports: [], resistances: [] },
-        degraded: true, source: q0.source,
-      };
+      let analysis = null;
+      // 完整管线：东财K线 → 腾讯/新浪K线兜底（fetch.mjs 已多源）
+      try {
+        const tmp = '/tmp/portal-az-' + String(args.input).replace(/[^a-zA-Z0-9]/g, '') + '-' + Date.now() + '.json';
+        await localFetchRun([args.input, '--days', '90', '--out', tmp]);
+        analysis = await localAnalyzeRun([tmp]);
+      } catch (e) { /* fallthrough */ }
+      if (!analysis) {
+        // 完全降级：仅实时行情
+        const q0 = await fetchQuoteOne(args.input);
+        if (!q0) throw new Error('无法获取行情（多源均失败）');
+        analysis = {
+          meta: { code: q0.code, name: q0.name },
+          quote: { price: q0.price, pct: q0.pct, prevClose: q0.prevClose, high: q0.high, low: q0.low, open: q0.open },
+          signals: { score: 0, verdict: '观望', factors: [] },
+          positionAnalysis: { zone: '-', buyScore: 0, sellScore: 0, bias: '-' },
+          sentiment: { label: '-', score: 0 },
+          growth: { label: '-', score: 0 },
+          levels: { supports: [], resistances: [] },
+          degraded: true, source: q0.source,
+        };
+      }
       const s2 = analysis.signals, p2 = analysis.positionAnalysis, se = analysis.sentiment, g = analysis.growth, q = analysis.quote;
       let label = '观望', cls = 'neutral';
       if (s2.verdict === '买入' && p2 && p2.buyScore >= 40 && g && g.score >= 30 && q.pct < 5) { label = '可买入'; cls = 'buy'; }
