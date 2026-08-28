@@ -1,0 +1,279 @@
+#!/usr/bin/env node
+/**
+ * portal-server.mjs — 股票分析平台门户服务（产品级首页）
+ * 替代静态文件服务：默认首页 = 产品门户（导航 + 模拟账户 + 真实账户 + 自选 + 分析）
+ * 用法: node portal-server.mjs [--port 8799]
+ */
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+
+const PORT = process.argv.includes("--port") ? parseInt(process.argv[process.argv.indexOf("--port") + 1]) : 8799;
+const DSH_API = "http://127.0.0.1:3080";
+import { run as localFetchRun } from "./fetch.mjs";
+import { run as localAnalyzeRun } from "./analyze.mjs";
+
+// 产品门户 HTML（单页应用）
+function portalHTML() {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>📈 股票分析平台</title>
+<style>
+:root{--bg:#0b0f1d;--panel:#121829;--panel2:#0e1424;--line:#232c47;--txt:#e6eaf5;--dim:#8a93b2;--up:#f0483e;--down:#2ebd85;--gold:#f5b942;--blue:#3b82f6;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh}
+.topbar{display:flex;align-items:center;gap:18px;padding:14px 24px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+.topbar .logo{font-size:18px;font-weight:700}
+.topbar nav{display:flex;gap:4px;flex:1}
+.topbar nav button{padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer;background:none;border:none;color:var(--dim);border-radius:8px}
+.topbar nav button:hover{color:var(--txt);background:var(--panel2)}
+.topbar nav button.active{color:var(--blue);background:rgba(59,130,246,.12)}
+.wrap{max-width:1100px;margin:0 auto;padding:24px}
+.view{display:none} .view.active{display:block}
+h1{font-size:22px;margin-bottom:6px} .sub{color:var(--dim);font-size:13px;margin-bottom:20px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card .k{color:var(--dim);font-size:12px;margin-bottom:6px} .card .v{font-size:22px;font-weight:700}
+.up{color:var(--up)} .down{color:var(--down)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--panel);border-radius:12px;overflow:hidden}
+th{color:var(--dim);font-size:12px;text-align:left;padding:10px 14px;background:var(--panel2);border-bottom:1px solid var(--line)}
+td{padding:12px 14px;border-bottom:1px solid var(--line)}
+.badge{display:inline-block;padding:2px 10px;border-radius:6px;font-size:11.5px;font-weight:600}
+.b-buy{background:rgba(240,72,62,.15);color:var(--up)} .b-sell{background:rgba(46,189,133,.15);color:var(--down)}
+.b-watch{background:rgba(245,185,66,.14);color:var(--gold)} .b-caution{background:rgba(59,130,246,.14);color:var(--blue)} .b-neutral{background:rgba(138,147,178,.14);color:var(--dim)}
+.search-row{display:flex;gap:10px;margin-bottom:20px}
+.search-row input{flex:1;max-width:400px;padding:12px 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:15px;outline:none}
+.search-row input:focus{border-color:var(--blue)}
+.search-row button{padding:12px 24px;border:none;border-radius:8px;background:var(--blue);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.loading{color:var(--dim);font-size:13px;padding:20px;text-align:center}
+.err{background:rgba(240,72,62,.1);border:1px solid rgba(240,72,62,.4);color:var(--up);padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px}
+.empty{color:var(--dim);font-size:13px;padding:20px;text-align:center}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">📈 股票分析平台</div>
+  <nav>
+    <button data-view="analyze" class="active">🔍 分析</button>
+    <button data-view="sim">💰 模拟账户</button>
+    <button data-view="real">💼 真实账户</button>
+    <button data-view="watchlist">⭐ 自选股</button>
+  </nav>
+</div>
+<div class="wrap">
+  <div class="view active" id="view-analyze">
+    <h1>🔍 股票分析</h1>
+    <div class="sub">输入代码或名称，实时生成完整分析（信号/位置/情绪/增长/支撑压力）</div>
+    <div class="search-row">
+      <input id="q" placeholder="如 600519 / 贵州茅台 / 002594" onkeydown="if(event.key==='Enter')doAnalyze()"/>
+      <button onclick="doAnalyze()">分析</button>
+    </div>
+    <div id="analyzeResult"></div>
+  </div>
+  <div class="view" id="view-sim"><div class="loading" id="simLoading">加载中…</div><div id="simContent"></div></div>
+  <div class="view" id="view-real"><div class="loading" id="realLoading">加载中…</div><div id="realContent"></div></div>
+  <div class="view" id="view-watchlist"><div class="loading" id="wlLoading">加载中…</div><div id="wlContent"></div></div>
+</div>
+<script>
+const fmt=(v,d=2)=>v===null||v===undefined||isNaN(v)?"-":Number(v).toFixed(d);
+const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const DSH="";
+const clsMap={buy:"b-buy",sell:"b-sell",watch:"b-watch",caution:"b-caution",neutral:"b-neutral"};
+
+document.querySelectorAll(".topbar nav button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll(".topbar nav button").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+    b.classList.add("active");
+    const v=b.dataset.view;
+    document.getElementById("view-"+v).classList.add("active");
+    if(v==="sim")loadSim(); if(v==="real")loadReal(); if(v==="watchlist")loadWatchlist();
+  });
+});
+
+function timing(res){
+  const s=res.signals,p=res.positionAnalysis,g=res.growth,q=res.quote;
+  if(s.verdict==="买入"&&p&&p.buyScore>=40&&g&&g.score>=30&&q.pct<5)return{label:"可买入",cls:"buy"};
+  if(p&&p.sellScore>=55)return{label:"注意止盈",cls:"sell"};
+  if(s.verdict==="买入"||s.verdict==="关注")return{label:"可关注",cls:"watch"};
+  if(s.verdict==="回避"||s.verdict==="谨慎")return{label:"回避/谨慎",cls:"caution"};
+  return{label:"观望",cls:"neutral"};
+}
+
+async function doAnalyze(){
+  const v=document.getElementById("q").value.trim();
+  if(!v)return;
+  const el=document.getElementById("analyzeResult");
+  el.innerHTML='<div class="loading">分析中…</div>';
+  try{
+    const r=await fetch('/api/analyze',{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({input:v})});
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error||"分析失败");
+    const q=j.quote,s=j.signals,p=j.positionAnalysis,se=j.sentiment,g=j.growth,t=timing(j);
+    const factors=(s.factors||[]).filter(f=>f.score!==0).map(f=>f.name+"("+(f.score>0?"+":"")+f.score+")").join(" ");
+    el.innerHTML='<div class="cards">'+
+      '<div class="card"><div class="k">'+esc(j.meta.name)+' '+j.meta.code+'</div><div class="v">'+fmt(q.price)+' <span class="'+(q.pct>=0?"up":"down")+'" style="font-size:14px">'+(q.pct>=0?"+":"")+fmt(q.pct,2)+'%</span></div></div>'+
+      '<div class="card"><div class="k">买卖时机</div><div class="v"><span class="badge '+clsMap[t.cls]+'">'+t.label+'</span></div></div>'+
+      '<div class="card"><div class="k">信号</div><div class="v">'+esc(s.verdict)+' '+s.score+'</div></div>'+
+      '<div class="card"><div class="k">位置</div><div class="v">'+esc(p.zone)+' <span style="font-size:12px;color:var(--dim)">买'+p.buyScore+'/卖'+p.sellScore+'</span></div></div></div>'+
+      '<table><tr><th>情绪</th><th>增长</th><th>支撑</th><th>压力</th><th>关键因子</th></tr>'+
+      '<tr><td>'+esc(se.label)+' '+fmt(se.score)+'</td><td>'+esc(g.label)+' '+g.score+'</td><td style="color:var(--down)">'+(j.levels.supports||[]).map(x=>fmt(x.price)).join(" / ")+'</td><td style="color:var(--up)">'+(j.levels.resistances||[]).map(x=>fmt(x.price)).join(" / ")+'</td><td style="font-size:12px">'+esc(factors)+'</td></tr></table>';
+  }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
+}
+
+async function loadSim(){
+  const el=document.getElementById("simContent");
+  el.innerHTML='<div class="loading">加载中…</div>';
+  try{
+    const j=await fetch(DSH+"/api/stock/accounts").then(r=>r.json());
+    const acc=j.sim;
+    if(!acc){el.innerHTML='<div class="empty">模拟账户未初始化</div>';return;}
+    const last=acc.daily&&acc.daily.length?acc.daily[acc.daily.length-1]:null;
+    const rows=(acc.holdings||[]).map(h=>'<tr><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+(h.buyDate||"-")+'</td></tr>').join("");
+    el.innerHTML='<div class="cards">'+
+      '<div class="card"><div class="k">总资产</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?fmt(last.totalValue,0):"-")+'</div></div>'+
+      '<div class="card"><div class="k">累计盈亏</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?(last.pnl>=0?"+":"")+fmt(last.pnl,0)+"（"+(last.pnlPct>=0?"+":"")+fmt(last.pnlPct,2)+"%）":"-")+'</div></div>'+
+      '<div class="card"><div class="k">现金</div><div class="v">'+fmt(acc.cash,0)+'</div></div>'+
+      '<div class="card"><div class="k">沪深300</div><div class="v">'+(last&&last.benchPct!=null?(last.benchPct>=0?"+":"")+fmt(last.benchPct,2)+"%":"—")+'</div></div></div>'+
+      '<table><tr><th>股票</th><th>股数</th><th>成本</th><th>买入日</th></tr>'+(rows||'<tr><td colspan="4" class="empty">空仓</td></tr>')+'</table>';
+  }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
+}
+
+async function loadReal(){
+  const el=document.getElementById("realContent");
+  el.innerHTML='<div class="loading">加载中…</div>';
+  try{
+    const j=await fetch(DSH+"/api/stock/accounts").then(r=>r.json());
+    const acc=j.real;
+    if(!acc||!(acc.holdings||[]).length){el.innerHTML='<div class="empty">暂无真实持仓</div>';return;}
+    const last=acc.daily&&acc.daily.length?acc.daily[acc.daily.length-1]:null;
+    const rows=(acc.holdings||[]).map(h=>'<tr><td><b>'+esc(h.name)+'</b> '+h.code+'</td><td>'+h.shares+'</td><td>'+fmt(h.costPrice)+'</td><td>'+(h.buyDate||"-")+'</td></tr>').join("");
+    el.innerHTML='<div class="cards">'+
+      '<div class="card"><div class="k">持仓市值</div><div class="v">'+(last?fmt(last.holdingsValue,0):"-")+'</div></div>'+
+      '<div class="card"><div class="k">浮动盈亏</div><div class="v '+(last&&last.pnl>=0?"up":"down")+'">'+(last?(last.pnl>=0?"+":"")+fmt(last.pnl,0)+"（"+(last.pnlPct>=0?"+":"")+fmt(last.pnlPct,2)+"%）":"-")+'</div></div>'+
+      '<div class="card"><div class="k">持仓成本</div><div class="v">'+(last?fmt(last.costValue,0):"-")+'</div></div></div>'+
+      '<table><tr><th>股票</th><th>股数</th><th>成本</th><th>买入日</th></tr>'+rows+'</table>';
+  }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
+}
+
+async function loadWatchlist(){
+  const el=document.getElementById('wlContent');
+  el.innerHTML='<div class="loading">加载中…</div>';
+  try{
+    const j=await fetch('/api/watchlist-analysis').then(r=>r.json());
+    if(!j.results){el.innerHTML='<div class="empty">'+(j.error||'暂无数据')+'</div>';return;}
+    const rows=j.results.map(w=>{const t=w.timing||{label:'观望',cls:'neutral'};return '<tr><td><b>'+esc(w.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+w.code+'</span></td><td>'+fmt(w.price)+'<br><span style="color:'+(w.pct>=0?'var(--up)':'var(--down)')+';font-size:11px">'+(w.pct>=0?'+':'')+fmt(w.pct,2)+'%</span></td><td><span class="badge '+clsMap[t.cls]+'">'+t.label+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td></tr>';}).join('');
+    el.innerHTML='<table><tr><th>股票</th><th>现价</th><th>买卖时机</th><th>信号</th><th>位置</th><th>情绪</th><th>增长</th></tr>'+rows+'</table>';
+  }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
+}
+
+</script>
+</body>
+</html>`;
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, "http://x");
+  if (url.pathname === "/" || url.pathname === "/index.html") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(portalHTML());
+    return;
+  }
+  // 本地完整分析（信号+位置+情绪+增长）
+  if (url.pathname === '/api/analyze' && req.method === 'POST') {
+    try {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const args = JSON.parse(body || '{}');
+      if (!args.input) throw new Error('缺少 input');
+      const tmp = '/tmp/portal-an-' + Date.now() + '.json';
+      await localFetchRun([args.input, '--days', '90', '--out', tmp]);
+      const analysis = await localAnalyzeRun([tmp, '--out', tmp + '.res.json']);
+      const s2 = analysis.signals, p2 = analysis.positionAnalysis, se = analysis.sentiment, g = analysis.growth, q = analysis.quote;
+      let label = '观望', cls = 'neutral';
+      if (s2.verdict === '买入' && p2 && p2.buyScore >= 40 && g && g.score >= 30 && q.pct < 5) { label = '可买入'; cls = 'buy'; }
+      else if (p2 && p2.sellScore >= 55) { label = '注意止盈'; cls = 'sell'; }
+      else if (s2.verdict === '买入' || s2.verdict === '关注') { label = '可关注'; cls = 'watch'; }
+      else if (s2.verdict === '回避' || s2.verdict === '谨慎') { label = '回避/谨慎'; cls = 'caution'; }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        meta: analysis.meta, quote: q, signals: s2, positionAnalysis: p2, sentiment: se, growth: g,
+        levels: analysis.levels, timing: { label, cls }
+      }));
+      return;
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: e.message }));
+      return;
+    }
+  }
+
+  // 自选聚合分析（本地引擎）
+  if (url.pathname === '/api/watchlist-analysis') {
+    try {
+      const w = await fetch(DSH_API + '/api/stock/watchlist').then(r => r.json());
+      const list = w.watchlist || [];
+      const results = [];
+      const analyzeOne = async (it) => {
+        try {
+          const tmp = '/tmp/portal-wl-' + it.code + '-' + Date.now() + '.json';
+          await localFetchRun([it.code, '--days', '90', '--out', tmp]);
+          const analysis = await localAnalyzeRun([tmp, '--out', tmp + '.res.json']);
+          const s2 = analysis.signals, p2 = analysis.positionAnalysis, se = analysis.sentiment, g = analysis.growth, q = analysis.quote;
+          let label = '观望', cls = 'neutral';
+          if (s2.verdict === '买入' && p2 && p2.buyScore >= 40 && g && g.score >= 30 && q.pct < 5) { label = '可买入'; cls = 'buy'; }
+          else if (p2 && p2.sellScore >= 55) { label = '注意止盈'; cls = 'sell'; }
+          else if (s2.verdict === '买入' || s2.verdict === '关注') { label = '可关注'; cls = 'watch'; }
+          else if (s2.verdict === '回避' || s2.verdict === '谨慎') { label = '回避/谨慎'; cls = 'caution'; }
+          return { code: it.code, name: res.meta.name, industry: it.industry, price: q.price, pct: q.pct, timing: { label, cls }, verdict: s2.verdict, score: s2.score, zone: p2.zone, sentiment: se.label, growth: g.label };
+        } catch (e) { return null; }
+      };
+      const CONC = 2;
+      for (let i = 0; i < list.length; i += CONC) {
+        const batch = list.slice(i, i + CONC);
+        const done = await Promise.all(batch.map(analyzeOne));
+        results.push(...done.filter(Boolean));
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ results }));
+      return;
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: e.message }));
+      return;
+    }
+  }
+
+  // 代理 DSH API（避免跨域）
+  if (url.pathname.startsWith("/api/")) {
+    try {
+      const target = DSH_API + url.pathname + url.search;
+      const opts = { method: req.method, headers: {} };
+      if (req.method === "POST" || req.method === "PUT") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        opts.body = body;
+        opts.headers["Content-Type"] = "application/json";
+      }
+      const r = await fetch(target, opts);
+      const text = await r.text();
+      res.writeHead(r.status, { "Content-Type": r.headers.get("content-type") || "application/json; charset=utf-8" });
+      res.end(text);
+      return;
+    } catch (e) {
+      res.writeHead(502, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "代理失败: " + e.message }));
+      return;
+    }
+  }
+  res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+  res.end("Not Found");
+});
+
+server.listen(PORT, () => {
+  console.log("📈 股票分析平台已启动: http://127.0.0.1:" + PORT + "/");
+});
