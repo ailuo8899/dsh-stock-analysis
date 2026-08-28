@@ -128,6 +128,12 @@ document.querySelectorAll(".topbar nav button").forEach(b=>{
 });
 loadLeadersCards();
 
+// 隐藏指定 tab 的加载提示
+function hideLoading(id){
+  const el=document.getElementById(id);
+  if(el)el.style.display='none';
+}
+
 function timing(res){
   const s=res.signals,p=res.positionAnalysis,g=res.growth,q=res.quote;
   if(s.verdict==="买入"&&p&&p.buyScore>=40&&g&&g.score>=30&&q.pct<5)return{label:"可买入",cls:"buy"};
@@ -270,6 +276,7 @@ async function loadSim(){
       +'<div class="card"><div class="k">现金</div><div class="v">'+fmt(acc.cash,0)+'</div></div>'
       +'<div class="card"><div class="k">持仓数</div><div class="v">'+(acc.holdings||[]).length+'/'+(acc.rules?acc.rules.maxHoldings:3)+'</div></div></div>'
       +'<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>持仓盈亏</th><th>今日盈亏</th><th>占比</th><th>止损</th><th>止盈</th><th>信号</th><th>来源</th></tr>'+(rows||'<tr><td colspan="8" class="empty">空仓</td></tr>')+'</table>';
+  hideLoading('simLoading');
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
 
@@ -326,6 +333,7 @@ async function loadReal(){
       +'<div class="card"><div class="k">今日盈亏</div><div class="v '+(todayTotalPl>=0?"up":"down")+'">'+(todayTotalPl>=0?"+":"")+fmt(todayTotalPl,0)+'</div></div>'
       +'<div class="card"><div class="k">持仓成本</div><div class="v">'+fmt(totalCost,0)+'</div></div></div>'
       +'<table><tr><th>股票</th><th>股数</th><th>成本</th><th>现价</th><th>今日盈亏</th><th>持仓盈亏</th><th>市值/占比</th><th>止损</th><th>止盈</th><th>信号</th><th>来源</th></tr>'+(rows||'<tr><td colspan="11" class="empty">暂无持仓</td></tr>')+'</table>';
+  hideLoading('realLoading');
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
 async function loadWatchlist(){
@@ -336,6 +344,7 @@ async function loadWatchlist(){
     if(!j.results){el.innerHTML='<div class="empty">'+(j.error||'暂无数据')+'</div>';return;}
     const rows=j.results.map(w=>{const t=w.timing||{label:'观望',cls:'neutral'};return '<tr style="cursor:pointer" onclick="openAnalyze(\\''+w.code+'\\')"><td><b>'+esc(w.name)+'</b><br><span style="color:var(--dim);font-size:11px">'+w.code+'</span></td><td>'+fmt(w.price)+'<br><span style="color:'+(w.pct>=0?'var(--up)':'var(--down)')+';font-size:11px">'+(w.pct>=0?'+':'')+fmt(w.pct,2)+'%</span></td><td><span class="badge '+clsMap[t.cls]+'">'+t.label+'</span></td><td>'+esc(w.verdict)+' '+w.score+'</td><td>'+esc(w.zone)+'</td><td>'+esc(w.sentiment)+'</td><td>'+esc(w.growth)+'</td><td style="font-size:12px;color:var(--dim)">'+esc(w.comment||'')+'</td></tr>';}).join('');
     el.innerHTML='<table><tr><th>股票</th><th>现价</th><th>买卖时机</th><th>信号</th><th>位置</th><th>情绪</th><th>增长</th><th>理财师点评</th></tr>'+rows+'</table>';
+  hideLoading('wlLoading');
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
 
@@ -381,6 +390,7 @@ async function loadDaily(){
       html+='</table>';
     } else html+='<div class="empty">暂无自选</div>';
     el.innerHTML=html;
+  hideLoading('dailyLoading');
   }catch(e){el.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
 }
 
