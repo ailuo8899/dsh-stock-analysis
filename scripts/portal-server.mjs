@@ -15,6 +15,7 @@ import { run as localFetchRun } from "./fetch.mjs";
 import { run as localAnalyzeRun } from "./analyze.mjs";
 import { advisorSim, advisorReal } from "./advisor.mjs";
 import { fetchQuotes } from "./quotes.mjs";
+import { fetchQuoteOne } from "./quotes.mjs";
 
 // 产品门户 HTML（单页应用）
 function portalHTML() {
@@ -316,9 +317,19 @@ const server = http.createServer(async (req, res) => {
       for await (const chunk of req) body += chunk;
       const args = JSON.parse(body || '{}');
       if (!args.input) throw new Error('缺少 input');
-      const tmp = '/tmp/portal-an-' + Date.now() + '.json';
-      await localFetchRun([args.input, '--days', '90', '--out', tmp]);
-      const analysis = await localAnalyzeRun([tmp, '--out', tmp + '.res.json']);
+      // fetchQuoteOne 已静态导入
+      const q0 = await fetchQuoteOne(args.input);
+      if (!q0) throw new Error('无法获取行情（多源均失败）');
+      const analysis = {
+        meta: { code: q0.code, name: q0.name },
+        quote: { price: q0.price, pct: q0.pct, prevClose: q0.prevClose, high: q0.high, low: q0.low, open: q0.open },
+        signals: { score: 0, verdict: '观望', factors: [] },
+        positionAnalysis: { zone: '-', buyScore: 0, sellScore: 0, bias: '-' },
+        sentiment: { label: '-', score: 0 },
+        growth: { label: '-', score: 0 },
+        levels: { supports: [], resistances: [] },
+        degraded: true, source: q0.source,
+      };
       const s2 = analysis.signals, p2 = analysis.positionAnalysis, se = analysis.sentiment, g = analysis.growth, q = analysis.quote;
       let label = '观望', cls = 'neutral';
       if (s2.verdict === '买入' && p2 && p2.buyScore >= 40 && g && g.score >= 30 && q.pct < 5) { label = '可买入'; cls = 'buy'; }
@@ -348,26 +359,18 @@ const server = http.createServer(async (req, res) => {
         try {
           const tmp = '/tmp/portal-wl-' + it.code + '-' + Date.now() + '.json';
           let analysis = null;
-          try {
-            await Promise.race([
-              localFetchRun([it.code, '--days', '90', '--out', tmp]),
-              new Promise((_, rej) => setTimeout(() => rej(new Error('ef-timeout')), 6000))
-            ]);
-            analysis = await localAnalyzeRun([tmp, '--out', tmp + '.res.json']);
-          } catch (ef) {
-            const { fetchQuoteOne } = await import('./quotes.mjs');
-            const q = await fetchQuoteOne(it.code);
-            if (!q) return null;
-            analysis = {
-              meta: { code: it.code, name: q.name },
-              quote: { price: q.price, pct: q.pct, prevClose: q.prevClose },
-              signals: { score: 0, verdict: '观望', factors: [] },
-              positionAnalysis: { zone: '-', buyScore: 0, sellScore: 0 },
-              sentiment: { label: '-', score: 0 },
-              growth: { label: '-', score: 0 },
-              degraded: true, source: q.source,
-            };
-          }
+          // fetchQuoteOne 已静态导入
+          const q0 = await fetchQuoteOne(it.code);
+          if (!q0) return null;
+          analysis = {
+            meta: { code: it.code, name: q0.name },
+            quote: { price: q0.price, pct: q0.pct, prevClose: q0.prevClose },
+            signals: { score: 0, verdict: '观望', factors: [] },
+            positionAnalysis: { zone: '-', buyScore: 0, sellScore: 0 },
+            sentiment: { label: '-', score: 0 },
+            growth: { label: '-', score: 0 },
+            degraded: true, source: q0.source,
+          };
           const s2 = analysis.signals, p2 = analysis.positionAnalysis, se = analysis.sentiment, g = analysis.growth, q = analysis.quote;
           let label = '观望', cls = 'neutral';
           if (s2.verdict === '买入' && p2 && p2.buyScore >= 40 && g && g.score >= 30 && q.pct < 5) { label = '可买入'; cls = 'buy'; }
@@ -383,7 +386,7 @@ const server = http.createServer(async (req, res) => {
           return { code: it.code, name: analysis.meta.name, industry: it.industry, price: q.price, pct: q.pct, timing: { label, cls }, verdict: s2.verdict, score: s2.score, zone: p2.zone, sentiment: se.label, growth: g.label, comment, degraded: analysis.degraded || false, source: analysis.source || 'eastmoney' };
         } catch (e) { return null; }
       };
-      const CONC = 2;
+      const CONC = 6; // 全并发，东财限流时快速降级
       for (let i = 0; i < list.length; i += CONC) {
         const batch = list.slice(i, i + CONC);
         const done = await Promise.all(batch.map(analyzeOne));
