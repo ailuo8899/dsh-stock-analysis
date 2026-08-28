@@ -101,7 +101,37 @@ export async function fetchQuotes(codes) {
   return map;
 }
 
-export { fetchQuoteOne, toSymbol, parseTencent, parseSina, fmt };
+// 查询指数（沪深300/上证等）
+async function fetchIndex(code) {
+  // 指数代码：沪深300=000300, 上证=000001
+  const sym = "sh" + String(code).replace(/^(sh|sz)/, "");
+  try {
+    const r = await fetch("https://qt.gtimg.cn/q=" + sym, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (r.ok) {
+      const text = await r.text();
+      const q = parseTencent(text);
+      if (q) return q;
+    }
+  } catch (e) { /* fallthrough */ }
+  // 新浪指数
+  try {
+    const r = await fetch("https://hq.sinajs.cn/list=" + sym, {
+      headers: { "Referer": "https://finance.sina.com.cn/", "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (r.ok) {
+      const text = await r.text();
+      const q = parseSina(text);
+      if (q) return q;
+    }
+  } catch (e) { /* fallthrough */ }
+  return null;
+}
+
+export { fetchQuoteOne, fetchIndex, toSymbol, parseTencent, parseSina, fmt };
 
 // CLI
 if (typeof process !== "undefined" && process.argv[1] && import.meta.url === "file://" + process.argv[1]) {

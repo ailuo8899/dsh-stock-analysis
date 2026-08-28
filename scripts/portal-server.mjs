@@ -16,6 +16,7 @@ import { run as localAnalyzeRun } from "./analyze.mjs";
 import { advisorSim, advisorReal } from "./advisor.mjs";
 import { fetchQuotes } from "./quotes.mjs";
 import { fetchQuoteOne } from "./quotes.mjs";
+import { fetchIndex } from "./quotes.mjs";
 
 // 产品门户 HTML（单页应用）
 function portalHTML() {
@@ -221,6 +222,7 @@ async function loadDaily(){
     if(j.error){el.innerHTML='<div class="err">'+esc(j.error)+'</div>';return;}
     const sim=j.sim, real=j.real, wl=j.watchlist;
     let html='';
+    if(j.index){html+='<div style="background:rgba(245,185,66,.08);border:1px solid rgba(245,185,66,.3);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px">📊 沪深300：<b>'+fmt(j.index.price)+'</b>（'+(j.index.pct>=0?'+':'')+fmt(j.index.pct,2)+'%）· 来源:'+esc(j.index.source)+'</div>';}
     html+='<h2 style="font-size:16px;color:#3b82f6;margin:16px 0 8px">💰 模拟账户</h2>';
     if(sim){
       const last=sim.last;
@@ -309,6 +311,11 @@ const server = http.createServer(async (req, res) => {
       const simPnl = simTotal - (sim ? sim.capital : simTotal);
       const simPnlPct = sim && sim.capital > 0 ? simPnl / sim.capital * 100 : 0;
       const simLast = sim && sim.daily && sim.daily.length ? sim.daily[sim.daily.length - 1] : null;
+      let hs300 = null;
+      try {
+        const idx = await fetchIndex('000300');
+        if (idx) hs300 = { price: idx.price, pct: idx.pct, prevClose: idx.prevClose, source: idx.source };
+      } catch (e) {}
       const realCodes = (real && real.holdings || []).map(h => h.code);
       const realQ = realCodes.length ? await fetchQuotes(realCodes) : {};
       const realHoldings = (real && real.holdings || []).map(h => {
@@ -338,7 +345,8 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({
         sim: { capital: sim ? sim.capital : 0, cash: sim ? sim.cash : 0, holdings: simHoldings, last: simLast, totalValue: simTotal, pnl: simPnl, pnlPct: simPnlPct },
         real: { holdings: realHoldings },
-        watchlist
+        watchlist,
+        index: hs300
       }));
       return;
     } catch (e) {
