@@ -23,9 +23,27 @@ function loadJSON(f) {
 
 async function analyzeOne(code) {
   const tmp = path.join(os.tmpdir(), "sum-" + code + "-" + Date.now() + ".json");
-  await fetchRun([code, "--days", "90", "--out", tmp]);
-  const res = await analyzeRun([tmp, "--out", tmp + ".res.json"]);
-  return res;
+  try {
+    // 东财完整分析
+    await fetchRun([code, "--days", "90", "--out", tmp]);
+    const res = await analyzeRun([tmp, "--out", tmp + ".res.json"]);
+    return res;
+  } catch (e) {
+    // 东财限流：多源行情降级
+    const { fetchQuoteOne } = await import("./quotes.mjs");
+    const q = await fetchQuoteOne(code);
+    if (!q) throw e;
+    return {
+      meta: { code, name: q.name },
+      quote: { price: q.price, pct: q.pct, prevClose: q.prevClose, high: q.high, low: q.low },
+      signals: { score: 0, verdict: "观望", factors: [] },
+      positionAnalysis: { zone: "-", buyScore: 0, sellScore: 0, bias: "-" },
+      sentiment: { label: "-", score: 0 },
+      growth: { label: "-", score: 0 },
+      levels: { supports: [], resistances: [] },
+      degraded: true, source: q.source,
+    };
+  }
 }
 
 // 判定买卖时机
