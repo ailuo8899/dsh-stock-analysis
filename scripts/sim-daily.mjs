@@ -15,10 +15,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 function parseArgs(argv) {
-  const args = { out: null, candidates: null };
+  const args = { out: null, candidates: null, force: false };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--out") args.out = argv[++i];
     else if (argv[i] === "--candidates") args.candidates = argv[++i];
+    else if (argv[i] === "--force") args.force = true;
   }
   return args;
 }
@@ -43,13 +44,17 @@ export async function run(argv) {
   const acc = loadAccount();
   if (!acc) { console.error("账户未初始化，先运行: node sim.mjs init"); process.exit(1); }
   const date = today();
-  if (acc.lastRunDate === date) {
-    console.log("今天已运行过（" + date + "），如需重跑请先清空 lastRunDate 或改日期。");
+  if (acc.lastRunDate === date && !args.force) {
+    console.log("今天已运行过（" + date + "），使用 --force 可盘中重跑（午盘/尾盘）。");
     return acc;
+  }
+  if (acc.lastRunDate === date && args.force) {
+    console.log("⚠ 盘中重跑（--force）: " + date + "，将追加本时段分析快照。");
   }
 
   const actions = [];   // 今日操作记录
   const quotes = {};    // 代码 → 现价
+  const soldCodes = new Set(); // 本run已卖出代码，禁止同run回补
 
   // ---------- 1. 分析持仓，决定卖出/持有 ----------
   for (const h of [...acc.holdings]) {
@@ -60,6 +65,7 @@ export async function run(argv) {
       if (sellReasons.length) {
         const reason = sellReasons.join("；");
         const r = executeSell(acc, h, res.quote.price, date, reason);
+        soldCodes.add(h.code);
         actions.push({ type: "SELL", code: h.code, name: h.name, price: res.quote.price, shares: h.shares, pnl: r.pnl, pnlPct: r.pnlPct, reason });
         console.log("  🔴 卖出 " + h.name + "(" + h.code + ") " + fmt(res.quote.price) + " 盈亏 " + (r.pnl >= 0 ? "+" : "") + fmt(r.pnl) + " (" + (r.pnlPct >= 0 ? "+" : "") + fmt(r.pnlPct, 2) + "%) — " + reason);
       } else {
@@ -81,6 +87,7 @@ export async function run(argv) {
     for (const code of candidates) {
       if (acc.holdings.length >= acc.rules.maxHoldings) break;
       if (acc.holdings.some(h => h.code === code)) continue;
+      if (soldCodes.has(code)) { console.log("  ⚪ 跳过回补 " + code + "（本run已卖出）"); continue; }
       try {
         const { res } = await analyzeStock(code);
         quotes[code] = res.quote;
@@ -111,10 +118,13 @@ export async function run(argv) {
   const totalPnl = totalValue - acc.capital;
   const totalPnlPct = totalPnl / acc.capital * 100;
 
-  // 沪深300 基准：账户起始日指数 vs 今日指数
+  // 沪深300 基准：起始日=今日用当日涨跌，否则用累计
   const bench = await fetchBenchmark();
   let benchPct = null;
-  if (bench && bench.history.length) {
+  const startIsToday = !acc.startDate || acc.startDate === (bench && bench.today ? bench.today.date : "") || (bench && bench.today && acc.startDate >= bench.today.date);
+  if (startIsToday && bench && bench.today && typeof bench.today.pct === "number") {
+    benchPct = bench.today.pct; // 起始日=今日：用当日指数涨跌对比
+  } else if (bench && bench.history.length) {
     const startDate = acc.startDate;
     const startBar = bench.history.find(h => h.date >= startDate) || bench.history[0];
     const nowBar = bench.today;
@@ -122,10 +132,12 @@ export async function run(argv) {
       benchPct = (nowBar.close - startBar.close) / startBar.close * 100;
     }
   }
-  if (benchPct === null && bench && bench.today && typeof bench.today.pct === "number") benchPct = bench.today.pct; // 东财限流时用当日指数涨跌
+  if (benchPct === null && bench && bench.today && typeof bench.today.pct === "number") benchPct = bench.today.pct; // 兜底：当日指数涨跌
 
   acc.daily.push({
     date,
+    time: new Date().toTimeString().slice(0, 5),
+    session: args.force ? "intraday" : "open",
     totalValue: Number(totalValue.toFixed(2)),
     cash: Number(cash.toFixed(2)),
     holdingsValue: Number(holdingsValue.toFixed(2)),

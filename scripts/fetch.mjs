@@ -54,25 +54,41 @@ async function resolveStock(input) {
   };
 }
 
-/** 东财实时行情 */
+/** 东财实时行情（失败时切腾讯/新浪兜底） */
 async function fetchQuote(secid) {
   const fields = "f43,f44,f45,f46,f47,f48,f50,f57,f58,f60,f107,f168,f169,f170,f171,f292";
   const url = "https://push2.eastmoney.com/api/qt/stock/get?secid=" + secid +
     "&fields=" + fields + "&ut=fa5fd1943c7b386f172d6893dbfba10b";
-  const r = await fetch(url, { headers: UA });
-  if (!r.ok) throw new Error("行情请求失败 HTTP " + r.status);
-  const j = await r.json();
-  const d = j.data;
-  if (!d) throw new Error("行情数据为空：" + secid);
-  // A股价格字段统一放大100倍（两位小数）；d.f292 不是可靠的小数位标记
-  const S = 100;
-  return {
-    code: d.f57, name: d.f58,
-    price: d.f43 / S, open: d.f46 / S, high: d.f44 / S, low: d.f45 / S,
-    prevClose: d.f60 / S, change: d.f169 / S, pct: d.f170 / S,
-    volume: d.f47, amount: d.f48, turnover: d.f168 / S, amplitude: d.f171 / S,
-    ts: Date.now(),
-  };
+  try {
+    const r = await fetch(url, { headers: UA });
+    if (!r.ok) throw new Error("行情请求失败 HTTP " + r.status);
+    const j = await r.json();
+    const d = j.data;
+    if (!d) throw new Error("行情数据为空：" + secid);
+    // A股价格字段统一放大100倍（两位小数）；d.f292 不是可靠的小数位标记
+    const S = 100;
+    return {
+      code: d.f57, name: d.f58,
+      price: d.f43 / S, open: d.f46 / S, high: d.f44 / S, low: d.f45 / S,
+      prevClose: d.f60 / S, change: d.f169 / S, pct: d.f170 / S,
+      volume: d.f47, amount: d.f48, turnover: d.f168 / S, amplitude: d.f171 / S,
+      ts: Date.now(),
+    };
+  } catch (e) {
+    // 东财限流：腾讯/新浪实时行情兜底
+    const { fetchQuoteOne } = await import("./quotes.mjs");
+    const symbol = secidToSymbol(secid);
+    const q = await fetchQuoteOne(symbol);
+    if (!q) throw new Error("行情获取失败（东财+腾讯+新浪均不可用）: " + secid);
+    return {
+      code: q.code, name: q.name,
+      price: q.price, open: q.open, high: q.high, low: q.low,
+      prevClose: q.prevClose, change: q.change, pct: q.pct,
+      volume: q.volume || 0, amount: q.amount || 0, turnover: q.turnover || null,
+      amplitude: q.high && q.low && q.prevClose ? (q.high - q.low) / q.prevClose * 100 : null,
+      ts: Date.now(),
+    };
+  }
 }
 
 /** 腾讯日K线（前复权）兜底 */

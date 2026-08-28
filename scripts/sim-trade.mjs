@@ -131,11 +131,14 @@ export async function run(argv) {
     const totalPnlPct = totalPnl / acc.capital * 100;
     const bench = await fetchBenchmark();
     let benchPct = null;
-    if (bench && bench.history.length) {
+    const startIsToday = !acc.startDate || acc.startDate === (bench && bench.today ? bench.today.date : "") || (bench && bench.today && acc.startDate >= bench.today.date);
+    if (startIsToday && bench && bench.today && typeof bench.today.pct === "number") {
+      benchPct = bench.today.pct; // 起始日=今日：用当日指数涨跌对比
+    } else if (bench && bench.history.length) {
       const startBar = bench.history.find(h2 => h2.date >= acc.startDate) || bench.history[0];
       if (startBar && bench.today && startBar.close > 0) benchPct = (bench.today.close - startBar.close) / startBar.close * 100;
     }
-    if (benchPct === null && bench && bench.today && typeof bench.today.pct === "number") benchPct = bench.today.pct; // 东财限流时用当日指数涨跌
+    if (benchPct === null && bench && bench.today && typeof bench.today.pct === "number") benchPct = bench.today.pct; // 兜底：当日指数涨跌
     acc.daily.push({
       date, totalValue: Number(totalValue.toFixed(2)), cash: Number(cash.toFixed(2)), holdingsValue: Number(holdingsValue.toFixed(2)),
       pnl: Number(totalPnl.toFixed(2)), pnlPct: Number(totalPnlPct.toFixed(2)),

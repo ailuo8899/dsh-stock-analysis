@@ -93,8 +93,8 @@ async function fetchBenchmark() {
 function shouldSell(holding, res) {
   const s = res.signals, pos = res.positionAnalysis;
   const reasons = [];
-  // 1. 技术转弱
-  if (s.score <= res.quote ? -20 : -20) reasons.push("信号分 " + s.score + " 转弱");
+  // 1. 技术转弱（信号分 <= -20 才卖）
+  if (s.score <= -20) reasons.push("信号分 " + s.score + " 转弱");
   // 2. 高位卖出信号
   if (pos && pos.sellScore >= 60) reasons.push("卖出信号 " + pos.sellScore + "（" + pos.zone + "）");
   // 3. 止损：现价跌破持仓成本 -8% 或支撑位 -3%
