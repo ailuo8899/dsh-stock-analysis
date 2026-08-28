@@ -94,6 +94,30 @@ node <SKILL_DIR>/scripts/sim.mjs status
 | 卖出 | 信号分 ≤ -20（转弱）| 卖出信号 ≥ 60（高位）| 硬止损 -8% | 跌破支撑 |
 | 止盈 | 触及压力位 ×1.05 且信号转弱时部分止盈 |
 
+**DSH 驱动模式（推荐）**：交易决策由 Agent 基于实时数据分析后显式下达，脚本只执行+记账：
+
+```bash
+# 买入（实时分析确认后）
+node <SKILL_DIR>/scripts/sim-trade.mjs buy 600519 --shares 100 --note "信号买入71低位区"
+
+# 卖出（默认全卖，可指定股数）
+node <SKILL_DIR>/scripts/sim-trade.mjs sell 600519 --note "卖出信号60高位区"
+
+# 记录每日快照（含沪深300基准对比）
+node <SKILL_DIR>/scripts/sim-trade.mjs snapshot --note "今日分析结论"
+
+# 查看账户
+node <SKILL_DIR>/scripts/sim-trade.mjs status
+```
+
+**Agent 每日职责**：
+1. 用 fetch.mjs 抓**实时**行情/新闻/基本面
+2. 用 analyze.mjs 算信号、位置、增长、情绪
+3. **Agent 综合分析给出结论**（持有/买入/卖出 + 理由）
+4. 用 sim-trade.mjs 执行决策并记录（决策存 `decisions.json`）
+5. 用 snapshot 记录含**沪深300基准**的净值快照
+6. 向用户汇报操作、持仓、累计盈亏、**超额收益**，并复盘优化规则
+
 **每日汇报**：运行 sim-daily.mjs 后，向用户汇报：今日买卖操作、当前持仓、累计盈亏、净值曲线，并说明**为什么买入/卖出**（信号依据）。持续跟踪多日后，复盘哪些规则有效、哪些需要优化，调整 `account.json` 中 `rules` 字段后继续。
 
 > ⚠️ 模拟交易仅供策略研究，不构成投资建议。

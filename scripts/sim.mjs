@@ -50,11 +50,34 @@ function fmt(v, d = 2) { return v === null || v === undefined || isNaN(v) ? "-" 
 function pctOf(v, p) { return v * p / 100; }
 function today() { return new Date().toISOString().slice(0, 10); }
 
-// ---------- 分析一只股票（完整信号） ----------
+// ---------- 分析一只股票（完整信号，静默：用临时文件避免 stdout 污染） ----------
 async function analyzeStock(code) {
-  const data = await fetchRun([code, "--days", "90"]);
-  const res = await analyzeRun([JSON.stringify(data)]);
-  return { data, res };
+  const os = await import("node:os");
+  const tmp = path.join(os.tmpdir(), "sim-" + code + "-" + Date.now() + ".json");
+  await fetchRun([code, "--days", "90", "--out", tmp]);
+  const res = await analyzeRun([tmp, "--out", tmp + ".res.json"]);
+  return { data: null, res };
+}
+
+// ---------- 沪深300基准（东财指数日K） ----------
+// 返回 { today, history: [{date,close}] }；失败返回 null
+async function fetchBenchmark() {
+  try {
+    const end = "20500101", beg = "20250101";
+    const url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.000300" +
+      "&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=1&beg=" + beg +
+      "&end=" + end + "&lmt=500&ut=fa5fd1943c7b386f172d6893dbfba10b";
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://quote.eastmoney.com/" } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const rows = (j.data && j.data.klines) || [];
+    if (!rows.length) return null;
+    const history = rows.map(line => {
+      const p = line.split(",");
+      return { date: p[0], close: Number(p[2]) };
+    });
+    return { today: history[history.length - 1], history };
+  } catch (e) { return null; }
 }
 
 // ---------- 决策：当前持仓是否卖出 ----------
@@ -135,7 +158,7 @@ function accountValue(acc, quotes) {
   return { totalValue: acc.cash + holdingsValue, holdingsValue, cash: acc.cash };
 }
 
-export { loadAccount, saveAccount, defaultAccount, analyzeStock, shouldSell, shouldBuy, executeBuy, executeSell, accountValue, SIM_DIR, ACCOUNT_FILE, fmt, today };
+export { loadAccount, saveAccount, defaultAccount, analyzeStock, shouldSell, shouldBuy, executeBuy, executeSell, accountValue, fetchBenchmark, SIM_DIR, ACCOUNT_FILE, fmt, today };
 
 // ---------- CLI ----------
 if (typeof process !== "undefined" && process.argv[1] && import.meta.url === "file://" + process.argv[1]) {
