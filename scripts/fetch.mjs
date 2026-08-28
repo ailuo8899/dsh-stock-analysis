@@ -75,25 +75,63 @@ async function fetchQuote(secid) {
   };
 }
 
-/** 东财日K线（前复权） */
+/** 腾讯日K线（前复权）兜底 */
+async function fetchKlineTencent(symbol, days) {
+  const url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=" + symbol + ",day,,," + days + ",qfq";
+  const r = await fetch(url, { headers: { ...UA, "Referer": "https://gu.qq.com/" } });
+  if (!r.ok) throw new Error("腾讯K线 HTTP " + r.status);
+  const j = await r.json();
+  const d = j.data && j.data[symbol];
+  const k = d && (d.qfqday || d.day);
+  if (!k || !k.length) throw new Error("腾讯K线为空：" + symbol);
+  return k.slice(-days).map(row => ({
+    date: row[0], open: +row[1], close: +row[2], high: +row[3], low: +row[4],
+    volume: +row[5], amount: 0,
+  }));
+}
+
+/** 新浪日K线（不复权）兜底 */
+async function fetchKlineSina(symbol, days) {
+  const url = "https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?symbol=" + symbol + "&scale=240&ma=no&datalen=" + days;
+  const r = await fetch(url, { headers: { ...UA, "Referer": "https://finance.sina.com.cn/" } });
+  if (!r.ok) throw new Error("新浪K线 HTTP " + r.status);
+  const j = await r.json();
+  if (!Array.isArray(j) || !j.length) throw new Error("新浪K线为空：" + symbol);
+  return j.map(row => ({
+    date: row.day, open: +row.open, close: +row.close, high: +row.high, low: +row.low,
+    volume: +row.volume, amount: 0,
+  }));
+}
+
+/** 日K线（东财主 + 腾讯/新浪兜底，自动切换） */
 async function fetchKline(secid, days) {
   const end = "20500101", beg = "19900101";
   const url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=" + secid +
     "&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&beg=" +
     beg + "&end=" + end + "&lmt=" + days + "&ut=fa5fd1943c7b386f172d6893dbfba10b";
-  const r = await fetch(url, { headers: UA });
-  if (!r.ok) throw new Error("K线请求失败 HTTP " + r.status);
-  const j = await r.json();
-  const d = j.data;
-  if (!d || !d.klines) throw new Error("K线数据为空：" + secid);
-  return d.klines.slice(-days).map(line => {
-    // date,open,close,high,low,volume,amount,amplitude,pct,change,turnover
-    const p = line.split(",");
-    return {
-      date: p[0], open: +p[1], close: +p[2], high: +p[3], low: +p[4],
-      volume: +p[5], amount: +p[6],
-    };
-  });
+  try {
+    const r = await fetch(url, { headers: UA });
+    if (!r.ok) throw new Error("K线请求失败 HTTP " + r.status);
+    const j = await r.json();
+    const d = j.data;
+    if (!d || !d.klines) throw new Error("K线数据为空：" + secid);
+    return d.klines.slice(-days).map(line => {
+      // date,open,close,high,low,volume,amount,amplitude,pct,change,turnover
+      const p = line.split(",");
+      return {
+        date: p[0], open: +p[1], close: +p[2], high: +p[3], low: +p[4],
+        volume: +p[5], amount: +p[6],
+      };
+    });
+  } catch (e) {
+    // 东财限流：切腾讯，再切新浪
+    const symbol = secidToSymbol(secid);
+    try {
+      return await fetchKlineTencent(symbol, days);
+    } catch (e2) {
+      return await fetchKlineSina(symbol, days);
+    }
+  }
 }
 
 /** secid 转腾讯 symbol：1.600519 → sh600519；0.000001 → sz000001 */
