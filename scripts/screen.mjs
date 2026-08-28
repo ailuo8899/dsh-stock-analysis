@@ -74,8 +74,12 @@ async function fetchRank(strategy, pz) {
   });
 }
 
-/** 低位买入信号评分（独立于信号分，专注位置） */
-function lowPositionScore(kline, ind) {
+/** 双向位置分析：低位买入信号 + 高位卖出信号
+ *  buyScore  (0-100)：回撤深/区间低位/超卖/布林下轨/低位放量 → 越接近100越适合低吸
+ *  sellScore (0-100)：区间高位/超买/接近高点/放量滞涨/高位放量下跌 → 越接近100越该止盈减仓
+ *  zone      ：低位区 / 中低位 / 中位 / 中高位 / 高位区
+ */
+function positionAnalysis(kline, ind) {
   const closes = kline.map(k => k.close);
   const close = closes[closes.length - 1];
   const win = kline.slice(-60);
@@ -84,36 +88,70 @@ function lowPositionScore(kline, ind) {
   const dd = (close - hi60) / hi60 * 100;            // 距60日高点回撤%
   const pos = (close - lo60) / (hi60 - lo60) * 100;  // 60日区间位置 0-100
   const rsi = ind.rsi14;
-  let score = 0;
-  const notes = [];
-
-  // 回撤深度
-  if (dd <= -30) { score += 2.5; notes.push("距60日高点回撤 " + dd.toFixed(1) + "%，深度回调"); }
-  else if (dd <= -20) { score += 2; notes.push("距60日高点回撤 " + dd.toFixed(1) + "%，超跌"); }
-  else if (dd <= -10) { score += 1; notes.push("距60日高点回撤 " + dd.toFixed(1) + "%，回调较深"); }
-  else if (dd > -3) { score -= 1.5; notes.push("接近60日高点（回撤仅 " + dd.toFixed(1) + "%），追高风险"); }
-
-  // 区间位置（低位）
-  if (pos <= 15) { score += 1.5; notes.push("位于60日区间低位（" + pos.toFixed(0) + "%）"); }
-  else if (pos <= 30) { score += 1; notes.push("位于60日区间中低位（" + pos.toFixed(0) + "%）"); }
-  else if (pos >= 85) { score -= 1; notes.push("位于60日区间高位（" + pos.toFixed(0) + "%）"); }
-
-  // 布林下轨
-  if (close <= ind.boll.lower * 1.01) { score += 1; notes.push("贴近布林下轨，均值回归机会"); }
-  // 超卖
-  if (rsi <= 30) { score += 1; notes.push("RSI " + rsi.toFixed(1) + " 超卖"); }
-  else if (rsi >= 75) { score -= 1; notes.push("RSI " + rsi.toFixed(1) + " 超买"); }
-
-  // 低位放量（当日涨幅>0 且量比>1.5）
   const volRatio = ind.lastVolume / (ind.volMa5 || 1);
   const lastK = kline[kline.length - 1], prevK = kline[kline.length - 2];
-  if (lastK.close > prevK.close && volRatio > 1.5 && pos <= 40) {
-    score += 1.5; notes.push("低位放量上涨（量比 " + volRatio.toFixed(1) + "x），资金进场");
-  }
+  const upDay = lastK.close > prevK.close;
+  const volUp = volRatio > 1.3;
 
-  const norm = Math.max(-100, Math.min(100, Math.round(score / 8.5 * 100)));
-  const label = norm >= 35 ? "低位机会" : norm >= 12 ? "位置偏低" : norm > -12 ? "位置中性" : norm > -35 ? "位置偏高" : "高位风险";
-  return { score: norm, label, notes, drawdown: Math.round(dd * 100) / 100, rangePos: Math.round(pos) };
+  let buy = 0, sell = 0;
+  const buyNotes = [], sellNotes = [];
+
+  // ---- 回撤深度（低位买 / 高位卖共用） ----
+  if (dd <= -30) { buy += 2.5; buyNotes.push("距60日高点回撤 " + dd.toFixed(1) + "%，深度回调"); }
+  else if (dd <= -20) { buy += 2; buyNotes.push("距60日高点回撤 " + dd.toFixed(1) + "%，超跌"); }
+  else if (dd <= -10) { buy += 1; buyNotes.push("距60日高点回撤 " + dd.toFixed(1) + "%，回调较深"); }
+  if (dd > -5) { sell += 2; sellNotes.push("接近60日高点（回撤仅 " + dd.toFixed(1) + "%）"); }
+  else if (dd > -10) { sell += 0.8; sellNotes.push("距60日高点较近（回撤 " + dd.toFixed(1) + "%）"); }
+
+  // ---- 区间位置 ----
+  if (pos <= 15) { buy += 1.8; buyNotes.push("位于60日区间低位（" + pos.toFixed(0) + "%）"); }
+  else if (pos <= 30) { buy += 1.2; buyNotes.push("位于60日区间中低位（" + pos.toFixed(0) + "%）"); }
+  else if (pos <= 45) { buy += 0.5; buyNotes.push("位于60日区间中位偏下（" + pos.toFixed(0) + "%）"); }
+  if (pos >= 85) { sell += 2.2; sellNotes.push("位于60日区间高位（" + pos.toFixed(0) + "%）"); }
+  else if (pos >= 70) { sell += 1.2; sellNotes.push("位于60日区间中高位（" + pos.toFixed(0) + "%）"); }
+  else if (pos >= 55) { sell += 0.4; sellNotes.push("位于60日区间中位偏上（" + pos.toFixed(0) + "%）"); }
+
+  // ---- 布林带 ----
+  if (close <= ind.boll.lower * 1.01) { buy += 1.2; buyNotes.push("贴近布林下轨，均值回归机会"); }
+  if (close >= ind.boll.upper * 0.99) { sell += 1.2; sellNotes.push("贴近布林上轨，短线偏热"); }
+
+  // ---- RSI ----
+  if (rsi <= 30) { buy += 1.2; buyNotes.push("RSI " + rsi.toFixed(1) + " 超卖"); }
+  else if (rsi >= 70) { sell += 1.5; sellNotes.push("RSI " + rsi.toFixed(1) + " 超买"); }
+  else if (rsi >= 60) { sell += 0.5; sellNotes.push("RSI " + rsi.toFixed(1) + " 偏强"); }
+
+  // ---- 量价 ----
+  if (upDay && volUp && pos <= 40) { buy += 1.5; buyNotes.push("低位放量上涨（量比 " + volRatio.toFixed(1) + "x），资金进场"); }
+  if (upDay && volUp && pos >= 60) { sell += 1; sellNotes.push("高位放量上涨（量比 " + volRatio.toFixed(1) + "x），警惕诱多"); }
+  if (!upDay && volUp && pos >= 70) { sell += 1.8; sellNotes.push("高位放量下跌（量比 " + volRatio.toFixed(1) + "x），资金出逃"); }
+  if (!upDay && !volUp && pos >= 80) { sell += 0.8; sellNotes.push("高位缩量滞涨，上涨乏力"); }
+
+  // ---- 归一化 ----
+  const buyScore = Math.max(0, Math.min(100, Math.round(buy / 10 * 100)));
+  const sellScore = Math.max(0, Math.min(100, Math.round(sell / 10 * 100)));
+
+  // 位置分区
+  let zone;
+  if (pos >= 80) zone = "高位区";
+  else if (pos >= 65) zone = "中高位";
+  else if (pos >= 35) zone = "中位";
+  else if (pos >= 18) zone = "中低位";
+  else zone = "低位区";
+
+  // 买卖倾向标签
+  let bias;
+  if (buyScore >= 55 && sellScore < 40) bias = "低位买入区";
+  else if (sellScore >= 55 && buyScore < 40) bias = "高位卖出区";
+  else if (buyScore >= sellScore + 15) bias = "偏低位·可低吸";
+  else if (sellScore >= buyScore + 15) bias = "偏高·注意止盈";
+  else bias = "位置中性";
+
+  return {
+    buyScore, sellScore, zone, bias,
+    buyNotes: buyNotes.slice(0, 4), sellNotes: sellNotes.slice(0, 4),
+    drawdown: Math.round(dd * 100) / 100, rangePos: Math.round(pos),
+    hi60: Math.round(hi60 * 100) / 100, lo60: Math.round(lo60 * 100) / 100,
+  };
 }
 
 /** 动量/追高风险评分：当日涨幅 + 5/10日涨幅，暴涨重罚（-100=涨停追高，+100=回调企稳） */
@@ -154,13 +192,15 @@ function momentumScore(kline, pct) {
   return { score: norm, label, notes: notes.slice(0, 4), pct5: Math.round(pct5 * 10) / 10, pct10: Math.round(pct10 * 10) / 10 };
 }
 
-/** 综合五维 → 总分 0-100（技术30% 低位20% 情绪15% 增长15% 动量20%） */
+/** 综合五维 → 总分 0-100（技术30% 低位20% 情绪15% 增长15% 动量20%）
+ *  low 传 positionAnalysis 的返回值，用 buyScore（低位买入信号，0-100）
+ */
 function composite(sig, low, senti, growth, momentum) {
-  const t = (sig.score + 100) / 2;        // 0-100
-  const l = (low.score + 100) / 2;        // 0-100
-  const e = (senti.score + 1) / 2 * 100;  // 0-100
-  const g = (growth.score + 100) / 2;     // 0-100
-  const m = (momentum.score + 100) / 2;   // 0-100
+  const t = (sig.score + 100) / 2;          // 0-100
+  const l = low.buyScore;                   // 低位买入信号 0-100
+  const e = (senti.score + 1) / 2 * 100;    // 0-100
+  const g = (growth.score + 100) / 2;       // 0-100
+  const m = (momentum.score + 100) / 2;     // 0-100
   const total = Math.round(t * 0.30 + l * 0.20 + e * 0.15 + g * 0.15 + m * 0.20);
   return { tech: Math.round(t), low: Math.round(l), sentiment: Math.round(e), growth: Math.round(g), momentum: Math.round(m), total };
 }
@@ -173,6 +213,8 @@ function renderBoardHTML(output) {
     const total = p.composite.total;
     const totalCls = total >= 70 ? "t-strong" : total >= 55 ? "t-good" : total >= 40 ? "t-mid" : "t-weak";
     const riskTag = p.momentumScore <= -25 ? '<span class="risk-flag">⚠ ' + esc(p.momentumLabel) + '</span>' : "";
+    const sellTag = p.sellScore >= 55 ? '<span class="sell-flag">卖出区</span>' : "";
+    const zoneCls = p.zone === "高位区" ? "z-high" : p.zone === "低位区" ? "z-low" : p.zone === "中低位" ? "z-midlow" : p.zone === "中高位" ? "z-midhigh" : "z-mid";
     return [
       '<tr class="' + (p.momentumScore <= -25 ? "row-risk" : "") + '">',
       '<td><span class="total ' + totalCls + '">' + total + '</span></td>',
@@ -180,6 +222,7 @@ function renderBoardHTML(output) {
       '<td>' + fmt(p.price) + '</td>',
       '<td class="' + pctCls + '">' + (p.pct >= 0 ? "+" : "") + fmt(p.pct, 2) + '%</td>',
       '<td><span class="badge ' + verdictCls + '">' + esc(p.verdict) + '</span></td>',
+      '<td><div class="zone-badge ' + zoneCls + '">' + esc(p.zone) + '</div><div class="bi-dir">' + esc(p.bias) + '</div><div class="bi-score"><span class="b-buy">买' + p.buyScore + '</span><span class="b-sell">卖' + p.sellScore + '</span></div>' + sellTag + '</td>',
       '<td><div class="score-row"><span class="s-t">技' + p.composite.tech + '</span><span class="s-l">低' + p.composite.low + '</span><span class="s-e">情' + p.composite.sentiment + '</span><span class="s-g">增' + p.composite.growth + '</span><span class="s-m">动' + p.composite.momentum + '</span></div></td>',
       '<td><div class="reason">' + reasonFor(p) + '</div><div class="note">' + notesFor(p) + '</div></td>',
       '</tr>'
@@ -227,6 +270,16 @@ function renderBoardHTML(output) {
     '.note{color:var(--dim);font-size:11px;margin-top:4px}',
     '.foot{color:var(--dim);font-size:11px;margin-top:20px}',
     '.strat{display:inline-block;padding:2px 10px;border-radius:6px;background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-size:12px;margin-left:10px}',
+    '.zone-badge{display:inline-block;padding:2px 10px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap}',
+    '.z-high{background:rgba(240,72,62,.18);color:#ff6b5e;border:1px solid rgba(240,72,62,.5)}',
+    '.z-midhigh{background:rgba(245,185,66,.14);color:var(--gold);border:1px solid rgba(245,185,66,.4)}',
+    '.z-mid{background:rgba(138,147,178,.12);color:var(--dim);border:1px solid rgba(138,147,178,.35)}',
+    '.z-midlow{background:rgba(59,130,246,.14);color:var(--blue);border:1px solid rgba(59,130,246,.4)}',
+    '.z-low{background:rgba(46,189,133,.16);color:var(--down);border:1px solid rgba(46,189,133,.4)}',
+    '.bi-dir{font-size:12px;font-weight:600;margin-top:4px;color:var(--txt)}',
+    '.bi-score{display:flex;gap:8px;font-size:11px;margin-top:3px}',
+    '.b-buy{color:var(--down)} .b-sell{color:var(--up)}',
+    '.sell-flag{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700;color:#ff6b5e;background:rgba(240,72,62,.2);border:1px solid rgba(240,72,62,.5)}',
     '</style></head><body><div class="wrap">',
     '<nav class="navbar">',
     '<a href="screen-board.html" class="nav-primary">📊 今日推荐榜</a>',
@@ -236,10 +289,10 @@ function renderBoardHTML(output) {
     '</nav>',
     '<h1>📊 今日推荐榜</h1>',
     '<div class="sub">沪深A股 · 五维综合打分（' + weightDesc + '）· ' + new Date(output.generatedAt).toLocaleString("zh-CN", { hour12: false }) + '<span class="strat">策略：' + esc(output.args.strategy) + '</span></div>',
-    '<table><tr><th>综合分</th><th>股票</th><th>现价</th><th>涨跌幅</th><th>建议</th><th>五维评分</th><th>推荐理由</th></tr>',
+    '<table><tr><th>综合分</th><th>股票</th><th>现价</th><th>涨跌幅</th><th>建议</th><th>位置研判</th><th>五维评分</th><th>推荐理由</th></tr>',
     rows,
     '</table>',
-    '<div class="foot">⚠️ 数据由公开行情自动生成，仅供参考，不构成投资建议。追高风险标记（⚠）表示当日/近期涨幅过大，建议规避追高。</div>',
+    '<div class="foot">⚠️ 数据由公开行情自动生成，仅供参考，不构成投资建议。<b>位置研判</b>：绿=低位区（买' + '信号强），红=高位区（卖' + '信号强，持仓者可考虑止盈/减仓）。追高风险标记（⚠）表示当日/近期涨幅过大，建议规避追高。</div>',
     '</div></body></html>'
   ].join("\n");
 }
@@ -247,8 +300,9 @@ function renderBoardHTML(output) {
 function reasonFor(p) {
   const parts = [];
   if (p.growthScore >= 60) parts.push("净利/营收高增长");
-  if (p.lowScore >= 35) parts.push("低位机会");
-  else if (p.lowLabel === "位置偏低" || p.lowLabel === "低位机会") parts.push("位置偏低");
+  if (p.buyScore >= 50) parts.push("低位买入信号强");
+  else if (p.buyScore >= 35) parts.push("位置偏低");
+  if (p.sellScore >= 50) parts.push("⚠高位需防回调");
   if (p.momentumScore >= 30) parts.push("回调企稳");
   if (p.momentumScore <= -25) parts.push("短期涨幅过大");
   if (p.sentimentScore >= 0.3) parts.push("消息面偏多");
@@ -258,9 +312,12 @@ function reasonFor(p) {
 
 function notesFor(p) {
   const n = [];
+  // 高位卖出优先展示（持仓者视角）
+  if (p.sellScore >= 55 && p.sellNotes && p.sellNotes.length) n.push("高位提醒：" + p.sellNotes[0]);
   if (p.momentumNotes && p.momentumNotes.length) n.push(p.momentumNotes[0]);
   if (p.lowNotes && p.lowNotes.length) n.push(p.lowNotes[0]);
   if (p.verdict === "追高风险") n.push("建议等待回调后再评估");
+  if (p.sellScore >= 55) n.push("持仓者可考虑止盈/减仓");
   return n.slice(0, 3).join("；");
 }
 
@@ -285,25 +342,39 @@ export async function run(argv) {
       try {
         const data = await fetchRun([c.secid, "--days", String(args.days)]);
         const res = await analyzeRun([JSON.stringify(data)]);
-        const low = lowPositionScore(data.kline, {
+        const pos = positionAnalysis(data.kline, {
           rsi14: res.indicators.rsi14, boll: res.indicators.boll,
           lastVolume: data.kline[data.kline.length - 1].volume,
           volMa5: res.indicators.volMa5,
         });
         const momentum = momentumScore(data.kline, c.pct);
-        const comp = composite(res.signals, low, res.sentiment, res.growth, momentum);
+        const comp = composite(res.signals, pos, res.sentiment, res.growth, momentum);
 
         // 最终建议：动量追高时强制降级（涨停 → 追高风险/观望）
         let verdict = res.signals.verdict;
         if (momentum.score <= -60) verdict = "追高风险";
         else if (momentum.score <= -25 && (verdict === "买入" || verdict === "关注")) verdict = "观望";
 
+        // 高位卖出提醒：持仓者视角
+        let sellHint = null;
+        if (pos.sellScore >= 55 || pos.bias === "高位卖出区" || pos.bias === "偏高·注意止盈") {
+          sellHint = {
+            sellScore: pos.sellScore,
+            bias: pos.bias,
+            notes: pos.sellNotes.slice(0, 3),
+            zone: pos.zone,
+          };
+        }
+
         return {
           code: c.code, name: c.name, price: c.price, pct: c.pct,
           secid: c.secid,
           composite: comp,
           verdict, signalScore: res.signals.score,
-          lowScore: low.score, lowLabel: low.label, lowNotes: low.notes.slice(0, 3),
+          buyScore: pos.buyScore, sellScore: pos.sellScore, zone: pos.zone, bias: pos.bias,
+          lowNotes: pos.buyNotes.slice(0, 3), sellNotes: pos.sellNotes.slice(0, 3),
+          sellHint,
+          drawdown: pos.drawdown, rangePos: pos.rangePos, hi60: pos.hi60, lo60: pos.lo60,
           momentumScore: momentum.score, momentumLabel: momentum.label, momentumNotes: momentum.notes.slice(0, 3),
           sentimentLabel: res.sentiment.label, sentimentScore: res.sentiment.score,
           growthLabel: res.growth.label, growthScore: res.growth.score,
@@ -344,16 +415,31 @@ export async function run(argv) {
     console.log("saved: " + args.html);
   }
 
-  // 控制台推荐榜
-  console.log("\n========== 今日推荐（综合分排序） ==========");
+  // 控制台推荐榜（低位买入候选）
+  console.log("\n========== 今日推荐（低位买入视角 · 综合分排序） ==========");
   for (const p of ok.slice(0, 10)) {
+    const sellMark = p.sellScore >= 55 ? " 卖出区⚠" : "";
     console.log(
       "[" + p.composite.total + "分] " + p.name + "(" + p.code + ") " + p.price + "元 " +
-      (p.pct >= 0 ? "+" : "") + p.pct + "% | 技术" + p.composite.tech + " 低位" + p.composite.low +
+      (p.pct >= 0 ? "+" : "") + p.pct + "% | 技术" + p.composite.tech + " 买" + p.buyScore + "/卖" + p.sellScore +
       " 情绪" + p.composite.sentiment + " 增长" + p.composite.growth + " 动量" + p.composite.momentum +
-      " | " + p.verdict + (p.momentumNotes.length ? " ⚠" + p.momentumNotes[0] : "") +
+      " | " + p.zone + "·" + p.bias + " | " + p.verdict + sellMark +
+      (p.momentumNotes.length ? " ⚠" + p.momentumNotes[0] : "") +
       " | 支撑" + (p.support ?? "-") + " 压力" + (p.resistance ?? "-")
     );
+  }
+
+  // 高位卖出提醒（持仓者视角）
+  const sellZone = ok.filter(p => p.sellScore >= 55);
+  if (sellZone.length) {
+    console.log("\n========== 高位卖出提醒（持仓者止盈/减仓参考） ==========");
+    for (const p of sellZone) {
+      console.log(
+        "[" + p.name + "(" + p.code + ")] " + p.zone + " · 卖出信号" + p.sellScore + "/100 · " +
+        (p.sellNotes[0] || "") + (p.sellNotes[1] ? "；" + p.sellNotes[1] : "") +
+        " | 支撑" + (p.support ?? "-") + " 压力" + (p.resistance ?? "-")
+      );
+    }
   }
   if (failed.length) console.log("\n跳过 " + failed.length + " 只（数据异常）：" + failed.map(f => f.name).join("、"));
   return output;
