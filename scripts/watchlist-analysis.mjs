@@ -25,6 +25,38 @@ function parseArgs(argv) {
   return args;
 }
 
+// 降级信号辅助：基于当日涨跌幅
+function degradedScore(pct) {
+  if (pct <= -5) return -60;
+  if (pct <= -2) return -30;
+  if (pct < 0) return -10;
+  if (pct === 0) return 0;
+  if (pct < 2) return 15;
+  if (pct < 5) return 35;
+  return 55;
+}
+function degradedVerdict(pct) {
+  if (pct <= -5) return "回避";
+  if (pct <= -2) return "谨慎";
+  if (pct < 0) return "观望";
+  if (pct === 0) return "观望";
+  if (pct < 2) return "关注";
+  if (pct < 5) return "买入";
+  return "追高警惕";
+}
+function degradedZone(pct) {
+  if (pct >= 5) return "高位";
+  if (pct >= 2) return "中高位";
+  if (pct <= -5) return "超跌";
+  if (pct <= -2) return "低位";
+  return "中位";
+}
+function degradedSenti(pct) {
+  if (pct >= 2) return "偏多";
+  if (pct <= -2) return "偏空";
+  return "中性";
+}
+
 async function analyzeOne(code) {
   const os = await import("node:os");
   const tmp = path.join(os.tmpdir(), "wl-" + code + "-" + Date.now() + ".json");
@@ -42,9 +74,9 @@ async function analyzeOne(code) {
     const res = {
       meta: { code, name: q.name },
       quote: { price: q.price, pct: q.pct, prevClose: q.prevClose, high: q.high, low: q.low },
-      signals: { score: 0, verdict: "观望", factors: [] },
-      positionAnalysis: { zone: "-", buyScore: 0, sellScore: 0, bias: "-" },
-      sentiment: { label: "-", score: 0 },
+      signals: { score: degradedScore(q.pct), verdict: degradedVerdict(q.pct), factors: [] },
+      positionAnalysis: { zone: degradedZone(q.pct), buyScore: Math.max(0, 50 + q.pct * 5), sellScore: Math.max(0, 50 - q.pct * 5), bias: "-" },
+      sentiment: { label: degradedSenti(q.pct), score: Math.max(-1, Math.min(1, q.pct / 5)) },
       growth: { label: "-", score: 0 },
       levels: { supports: [], resistances: [] },
       degraded: true, source: q.source,
